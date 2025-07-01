@@ -1295,7 +1295,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             </div>
             
             <div className="text-sm text-gray-400">
-              © 2025 ReviewAI. All rights reserved.
+              © 20 ReviewAI. All rights reserved.
             </div>
           </div>
         </div>
