@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, GitBranch, AlertCircle, AlertTriangle, CheckCircle, Clock, Wand2, Settings, ArrowLeft, Eye, RefreshCw, FileText } from 'lucide-react';
+import { Play, GitBranch, AlertCircle, AlertTriangle, CheckCircle, Clock, Wand2, Settings, ArrowLeft, Eye, RefreshCw, FileText, ExternalLink, ChevronDown, Plus, Minus, Code, GitMerge } from 'lucide-react';
 import { useGitHubIntegration } from '../hooks/useGitHubIntegration';
 import { useNavigate, useLocation } from 'react-router-dom';
 import IssueDetailModal from './IssueDetailModal';
@@ -25,10 +25,44 @@ interface CodeIssue {
   hash?: string;
 }
 
+interface PullRequest {
+  number: number;
+  title: string;
+  head: {
+    ref: string;
+  };
+  base: {
+    ref: string;
+  };
+  state: string;
+  user: {
+    login: string;
+  };
+}
+
+interface Branch {
+  name: string;
+  commit: {
+    sha: string;
+  };
+  protected: boolean;
+}
+
+interface FileChange {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  changes: number;
+  patch?: string;
+  changedLines: number[];
+}
+
 const TestReview: React.FC = () => {
   const [selectedRepo, setSelectedRepo] = useState('');
   const [pullNumber, setPullNumber] = useState('');
-  const [reviewType, setReviewType] = useState<'pr' | 'main'>('main');
+  const [pullRequestUrl, setPullRequestUrl] = useState('');
+  const [reviewType, setReviewType] = useState<'pr' | 'main'>('pr'); // DEFAULT TO PR
   const [reviewResult, setReviewResult] = useState<any>(null);
   const [showFixOptions, setShowFixOptions] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<CodeIssue | null>(null);
@@ -36,13 +70,55 @@ const TestReview: React.FC = () => {
   const [showCommitSuccess, setShowCommitSuccess] = useState(false);
   const [commitDetails, setCommitDetails] = useState<any>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [confirmationAction, setConfirmationAction] = useState<'all' | null>(null);
+  const [confirmationAction, setConfirmationAction] = useState<'all' | 'merge-ai' | 'merge-manual' | null>(null);
   const [isResuming, setIsResuming] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  
+  // NEW: Enhanced PR and Branch features
+  const [availablePRs, setAvailablePRs] = useState<PullRequest[]>([]);
+  const [availableBranches, setAvailableBranches] = useState<Branch[]>([]);
+  const [loadingPRs, setLoadingPRs] = useState(false);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  const [showPRDropdown, setShowPRDropdown] = useState(false);
+  const [showBranchDropdown, setShowBranchDropdown] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState('main');
+  const [currentUser, setCurrentUser] = useState<string>('');
+  
+  // NEW: File changes display
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+  
+  // NEW: Merge options
+  const [showMergeOptions, setShowMergeOptions] = useState(false);
   
   const { repositories, startReview, resumeReview, fixIssuesWithAI, removeSingleIssue, clearAllIssues, loading } = useGitHubIntegration();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Get current GitHub user
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      const token = localStorage.getItem('github_token');
+      if (token) {
+        try {
+          const response = await fetch('https://api.github.com/user', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/vnd.github.v3+json',
+            },
+          });
+          
+          if (response.ok) {
+            const userData = await response.json();
+            setCurrentUser(userData.login);
+          }
+        } catch (error) {
+          console.error('Failed to fetch current user:', error);
+        }
+      }
+    };
+
+    fetchCurrentUser();
+  }, []);
 
   // Check if repository was passed from navigation or if resuming a review
   useEffect(() => {
@@ -55,6 +131,106 @@ const TestReview: React.FC = () => {
       handleResumeReview(location.state.selectedRepo, location.state.reviewData);
     }
   }, [location.state]);
+
+  // Load PRs and Branches when repository is selected
+  useEffect(() => {
+    if (selectedRepo) {
+      if (reviewType === 'pr') {
+        loadPullRequests();
+      }
+      loadBranches();
+    }
+  }, [selectedRepo, reviewType]);
+
+  // NEW: Show merge options when review is complete and no critical issues
+  useEffect(() => {
+    if (reviewResult?.success && reviewType === 'pr' && pullNumber) {
+      const currentIssues = (reviewResult?.result?.issues || []).filter((issue: CodeIssue) => 
+        issue.severity === 'high' || issue.severity === 'medium'
+      );
+      
+      // Show merge options if no critical issues OR after fixing all issues
+      if (currentIssues.length === 0) {
+        setShowMergeOptions(true);
+        setShowFixOptions(false);
+      } else {
+        setShowMergeOptions(false);
+        setShowFixOptions(true);
+      }
+    } else {
+      setShowMergeOptions(false);
+    }
+  }, [reviewResult, reviewType, pullNumber]);
+
+  const loadPullRequests = async () => {
+    if (!selectedRepo) return;
+    
+    setLoadingPRs(true);
+    try {
+      const [owner, repo] = selectedRepo.split('/');
+      const token = localStorage.getItem('github_token');
+      
+      if (!token) return;
+
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls?state=open&per_page=100`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      });
+
+      if (response.ok) {
+        const prs = await response.json();
+        // NOW ALLOW ALL PRs INCLUDING OWN PRs (since it's part of the plan)
+        setAvailablePRs(prs);
+        
+        // Auto-select first available PR if exists
+        if (prs.length > 0 && !pullNumber) {
+          setPullNumber(prs[0].number.toString());
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load pull requests:', error);
+    } finally {
+      setLoadingPRs(false);
+    }
+  };
+
+  const loadBranches = async () => {
+    if (!selectedRepo) return;
+    
+    setLoadingBranches(true);
+    try {
+      const [owner, repo] = selectedRepo.split('/');
+      const token = localStorage.getItem('github_token');
+      
+      if (!token) return;
+
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches?per_page=100`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      });
+
+      if (response.ok) {
+        const branches = await response.json();
+        setAvailableBranches(branches);
+        
+        // Auto-select main/master branch
+        const defaultBranch = branches.find((b: Branch) => b.name === 'main' || b.name === 'master');
+        if (defaultBranch) {
+          setSelectedBranch(defaultBranch.name);
+        } else if (branches.length > 0) {
+          setSelectedBranch(branches[0].name);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load branches:', error);
+    } finally {
+      setLoadingBranches(false);
+    }
+  };
 
   const handleResumeReview = async (repoName: string, reviewData: any) => {
     try {
@@ -75,9 +251,47 @@ const TestReview: React.FC = () => {
     }
   };
 
+  const parsePullRequestUrl = (url: string) => {
+    // Parse GitHub PR URL: https://github.com/owner/repo/pull/123
+    const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/);
+    if (match) {
+      const [, owner, repo, prNumber] = match;
+      const fullRepoName = `${owner}/${repo}`;
+      
+      // Check if this repo exists in user's repositories
+      const repoExists = repositories.find(r => r.full_name === fullRepoName);
+      if (repoExists) {
+        setSelectedRepo(fullRepoName);
+        setPullNumber(prNumber);
+        setReviewType('pr');
+        return true;
+      } else {
+        alert('This repository is not connected to your account. Please connect it first.');
+        return false;
+      }
+    }
+    return false;
+  };
+
+  const handlePullRequestUrlChange = (url: string) => {
+    setPullRequestUrl(url);
+    if (url.trim()) {
+      const parsed = parsePullRequestUrl(url.trim());
+      if (!parsed && url.includes('github.com')) {
+        // Invalid URL format
+        alert('Invalid GitHub PR URL format. Expected: https://github.com/owner/repo/pull/123');
+      }
+    }
+  };
+
   const handleStartReview = async () => {
     if (!selectedRepo) {
       alert('Please select a repository');
+      return;
+    }
+
+    if (reviewType === 'pr' && !pullNumber) {
+      alert('Please enter a pull request number or select from available PRs');
       return;
     }
 
@@ -95,6 +309,17 @@ const TestReview: React.FC = () => {
 
   const handleAIFixAll = () => {
     setConfirmationAction('all');
+    setShowConfirmation(true);
+  };
+
+  // NEW: Merge handlers
+  const handleAIMerge = () => {
+    setConfirmationAction('merge-ai');
+    setShowConfirmation(true);
+  };
+
+  const handleManualMerge = () => {
+    setConfirmationAction('merge-manual');
     setShowConfirmation(true);
   };
 
@@ -141,6 +366,81 @@ const TestReview: React.FC = () => {
       setShowConfirmation(false);
       setConfirmationAction(null);
     }
+  };
+
+  // NEW: Confirm merge handlers
+  const handleConfirmAIMerge = async () => {
+    if (!selectedRepo || !pullNumber) return;
+    
+    try {
+      const [owner, repo] = selectedRepo.split('/');
+      const token = localStorage.getItem('github_token');
+      
+      if (!token) {
+        alert('GitHub token not found');
+        return;
+      }
+
+      // Merge the PR using GitHub API
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/merge`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          commit_title: `🤖 ReviewAI: Merge PR #${pullNumber} - Code review passed`,
+          commit_message: `Merged by ReviewAI after successful code review.\n\n✅ No critical issues found\n🔍 All changes reviewed and approved\n🚀 Ready for production`,
+          merge_method: 'merge'
+        }),
+      });
+
+      if (response.ok) {
+        const mergeResult = await response.json();
+        
+        // Show success modal
+        setCommitDetails({
+          message: `🤖 ReviewAI: Successfully merged PR #${pullNumber}`,
+          filesFixed: reviewResult.result?.fileChanges?.map((f: FileChange) => f.filename) || [],
+          issuesFixed: 0,
+          repositoryUrl: `https://github.com/${selectedRepo}`,
+          commitSha: mergeResult.sha,
+        });
+        setShowCommitSuccess(true);
+        
+        // Update review result to show merged
+        setReviewResult(prev => ({
+          ...prev,
+          merged: true,
+          mergeCommit: mergeResult.sha
+        }));
+        
+        setShowMergeOptions(false);
+        
+      } else {
+        const errorData = await response.json();
+        alert(`Merge failed: ${errorData.message || 'Unknown error'}`);
+      }
+      
+    } catch (error) {
+      console.error('AI merge failed:', error);
+      alert(`Merge failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setShowConfirmation(false);
+      setConfirmationAction(null);
+    }
+  };
+
+  const handleConfirmManualMerge = () => {
+    if (!selectedRepo || !pullNumber) return;
+    
+    // Open GitHub PR page for manual merge
+    const prUrl = `https://github.com/${selectedRepo}/pull/${pullNumber}`;
+    window.open(prUrl, '_blank');
+    
+    setShowConfirmation(false);
+    setConfirmationAction(null);
   };
 
   // CRITICAL: Handle single issue fix with proper tracking
@@ -215,6 +515,21 @@ const TestReview: React.FC = () => {
     }
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'added':
+        return 'text-green-600 bg-green-50';
+      case 'modified':
+        return 'text-blue-600 bg-blue-50';
+      case 'removed':
+        return 'text-red-600 bg-red-50';
+      case 'renamed':
+        return 'text-purple-600 bg-purple-50';
+      default:
+        return 'text-gray-600 bg-gray-50';
+    }
+  };
+
   const groupIssuesByFile = (issues: CodeIssue[]) => {
     return issues.reduce((acc, issue) => {
       if (!acc[issue.file]) {
@@ -225,8 +540,38 @@ const TestReview: React.FC = () => {
     }, {} as Record<string, CodeIssue[]>);
   };
 
-  const currentIssues = reviewResult?.result?.issues || [];
+  const toggleFileExpansion = (filename: string) => {
+    const newExpanded = new Set(expandedFiles);
+    if (newExpanded.has(filename)) {
+      newExpanded.delete(filename);
+    } else {
+      newExpanded.add(filename);
+    }
+    setExpandedFiles(newExpanded);
+  };
+
+  const formatPatchLine = (line: string) => {
+    if (line.startsWith('+')) {
+      return { type: 'addition', content: line.substring(1) };
+    } else if (line.startsWith('-')) {
+      return { type: 'deletion', content: line.substring(1) };
+    } else if (line.startsWith(' ')) {
+      return { type: 'context', content: line.substring(1) };
+    } else if (line.startsWith('@@')) {
+      return { type: 'hunk', content: line };
+    } else {
+      return { type: 'meta', content: line };
+    }
+  };
+
+  // CRITICAL: Filter out info-level issues from display
+  const currentIssues = (reviewResult?.result?.issues || []).filter((issue: CodeIssue) => 
+    issue.severity === 'high' || issue.severity === 'medium'
+  );
   const groupedIssues = groupIssuesByFile(currentIssues);
+
+  const selectedPR = availablePRs.find(pr => pr.number.toString() === pullNumber);
+  const selectedBranchObj = availableBranches.find(branch => branch.name === selectedBranch);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -267,6 +612,8 @@ const TestReview: React.FC = () => {
               <p className="text-gray-600">
                 {isResuming 
                   ? 'Continue your code review from where you left off'
+                  : reviewType === 'pr' 
+                  ? 'Review only the changes made in your pull request'
                   : 'Run a comprehensive code review on your repository'
                 }
               </p>
@@ -319,7 +666,7 @@ const TestReview: React.FC = () => {
                   </select>
                 </div>
 
-                {/* Review Type */}
+                {/* Review Type - DEFAULT TO PR */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Review Type
@@ -334,6 +681,9 @@ const TestReview: React.FC = () => {
                         className="mr-2"
                       />
                       Pull Request Review
+                      <span className="ml-2 text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                        Only changed lines
+                      </span>
                     </label>
                     <label className="flex items-center cursor-pointer">
                       <input
@@ -344,23 +694,162 @@ const TestReview: React.FC = () => {
                         className="mr-2"
                       />
                       Main Branch Review
+                      <span className="ml-2 text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
+                        Full repository
+                      </span>
                     </label>
                   </div>
                 </div>
 
-                {/* Pull Request Number */}
+                {/* Pull Request Options */}
                 {reviewType === 'pr' && (
+                  <div className="space-y-4">
+                    {/* PR URL Input */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        GitHub Pull Request URL (Optional)
+                      </label>
+                      <input
+                        type="url"
+                        value={pullRequestUrl}
+                        onChange={(e) => handlePullRequestUrlChange(e.target.value)}
+                        placeholder="https://github.com/owner/repo/pull/123"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Paste a GitHub PR URL to auto-fill repository and PR number
+                      </p>
+                    </div>
+
+                    {/* Available PRs Dropdown */}
+                    {selectedRepo && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Available Pull Requests
+                        </label>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setShowPRDropdown(!showPRDropdown)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left flex items-center justify-between cursor-pointer"
+                            disabled={loadingPRs}
+                          >
+                            <span>
+                              {loadingPRs 
+                                ? 'Loading pull requests...' 
+                                : selectedPR 
+                                ? `#${selectedPR.number}: ${selectedPR.title} (${selectedPR.head.ref} → ${selectedPR.base.ref})`
+                                : availablePRs.length > 0 
+                                ? 'Select a pull request...'
+                                : 'No pull requests found'
+                              }
+                            </span>
+                            <ChevronDown size={16} className={`transition-transform ${showPRDropdown ? 'rotate-180' : ''}`} />
+                          </button>
+
+                          {showPRDropdown && availablePRs.length > 0 && (
+                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
+                              {availablePRs.map((pr) => (
+                                <button
+                                  key={pr.number}
+                                  type="button"
+                                  onClick={() => {
+                                    setPullNumber(pr.number.toString());
+                                    setShowPRDropdown(false);
+                                  }}
+                                  className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 cursor-pointer"
+                                >
+                                  <div className="font-medium text-gray-900">
+                                    #{pr.number}: {pr.title}
+                                    {pr.user.login === currentUser && (
+                                      <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                        Your PR
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    {pr.head.ref} → {pr.base.ref} • by {pr.user.login}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Manual PR Number Input */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Or Enter Pull Request Number Manually
+                      </label>
+                      <input
+                        type="number"
+                        value={pullNumber}
+                        onChange={(e) => setPullNumber(e.target.value)}
+                        placeholder="e.g., 123"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Branch Selection for Main Branch Review */}
+                {reviewType === 'main' && selectedRepo && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Pull Request Number
+                      Select Branch to Review
                     </label>
-                    <input
-                      type="number"
-                      value={pullNumber}
-                      onChange={(e) => setPullNumber(e.target.value)}
-                      placeholder="e.g., 123"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowBranchDropdown(!showBranchDropdown)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left flex items-center justify-between cursor-pointer"
+                        disabled={loadingBranches}
+                      >
+                        <span>
+                          {loadingBranches 
+                            ? 'Loading branches...' 
+                            : selectedBranchObj 
+                            ? `${selectedBranchObj.name} ${selectedBranchObj.protected ? '(Protected)' : ''}`
+                            : availableBranches.length > 0 
+                            ? 'Select a branch...'
+                            : 'No branches found'
+                          }
+                        </span>
+                        <ChevronDown size={16} className={`transition-transform ${showBranchDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {showBranchDropdown && availableBranches.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
+                          {availableBranches.map((branch) => (
+                            <button
+                              key={branch.name}
+                              type="button"
+                              onClick={() => {
+                                setSelectedBranch(branch.name);
+                                setShowBranchDropdown(false);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 cursor-pointer"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="font-medium text-gray-900">{branch.name}</div>
+                                  <div className="text-sm text-gray-500">
+                                    {branch.commit.sha.substring(0, 7)}
+                                  </div>
+                                </div>
+                                {branch.protected && (
+                                  <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
+                                    Protected
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -368,7 +857,7 @@ const TestReview: React.FC = () => {
               <div className="flex gap-3 mt-6">
                 <motion.button
                   onClick={handleStartReview}
-                  disabled={loading || !selectedRepo}
+                  disabled={loading || !selectedRepo || (reviewType === 'pr' && !pullNumber)}
                   className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   whileHover={{ 
                     scale: loading ? 1 : 1.02, 
@@ -380,7 +869,7 @@ const TestReview: React.FC = () => {
                   {loading ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Analyzing Code...
+                      Analyzing {reviewType === 'pr' ? 'Changes' : 'Code'}...
                     </>
                   ) : (
                     <>
@@ -416,7 +905,7 @@ const TestReview: React.FC = () => {
             </motion.div>
           )}
 
-          {/* Review Results Summary */}
+          {/* Review Results Summary - ENHANCED FOR OWN PRS */}
           {reviewResult && (
             <motion.div
               className={`rounded-xl border p-6 ${
@@ -448,40 +937,279 @@ const TestReview: React.FC = () => {
                 }`}>
                   {currentIssues.length === 0 ? 'Review Complete' : 'Review In Progress'}
                   {reviewResult.result?.resumed && ' (Resumed)'}
+                  {reviewResult.result?.isOwnPR && ' - Your Pull Request'}
+                  {reviewResult.merged && ' - Merged ✅'}
                 </h3>
               </div>
               
               {reviewResult.success ? (
                 <div className="space-y-2">
-                  {currentIssues.length === 0 ? (
-                    <p className="text-green-700">
-                      ✅ Excellent! All issues have been resolved. Your code is ready!
-                    </p>
-                  ) : (
-                    <div>
-                      <p className="text-yellow-700 mb-2">
-                        📊 Review {reviewResult.result?.resumed ? 'resumed' : 'completed'} - found {currentIssues.length} issues to address
-                      </p>
-                      <div className="text-sm text-yellow-600 grid grid-cols-3 gap-4">
-                        <div>• Critical: {currentIssues.filter(i => i.severity === 'high').length}</div>
-                        <div>• Warnings: {currentIssues.filter(i => i.severity === 'medium').length}</div>
-                        <div>• Info: {currentIssues.filter(i => i.severity === 'low').length}</div>
+                  {/* SHOW PR DETAILS FOR OWN PRS */}
+                  {reviewResult.result?.prDetails && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                      <h4 className="font-semibold text-blue-900 mb-2">📋 Pull Request Details</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-blue-700 font-medium">Title:</span>
+                          <p className="text-blue-800">{reviewResult.result.prDetails.title}</p>
+                        </div>
+                        <div>
+                          <span className="text-blue-700 font-medium">Branch:</span>
+                          <p className="text-blue-800">{reviewResult.result.prDetails.branch}</p>
+                        </div>
+                        <div>
+                          <span className="text-blue-700 font-medium">Author:</span>
+                          <p className="text-blue-800">{reviewResult.result.prDetails.author}</p>
+                        </div>
+                        <div>
+                          <span className="text-blue-700 font-medium">Files Changed:</span>
+                          <p className="text-blue-800">{reviewResult.result.prDetails.filesChanged}</p>
+                        </div>
                       </div>
                     </div>
                   )}
-                  <p className="text-sm mt-3 opacity-75">
-                    Check your GitHub repository for detailed review comments!
-                  </p>
+
+                  {currentIssues.length === 0 ? (
+                    <div>
+                      <p className="text-green-700 font-medium mb-2">
+                        ✅ Excellent! {reviewResult.result?.isOwnPR ? 'Your pull request changes' : 'This code'} look great!
+                      </p>
+                      <p className="text-green-600 text-sm">
+                        {reviewResult.result?.isOwnPR 
+                          ? reviewType === 'pr'
+                            ? 'No critical issues found in your PR changes. The code follows best practices and is ready for review!'
+                            : 'No critical issues found. Your code is ready!'
+                          : 'All critical issues have been resolved. Your code is ready!'
+                        }
+                      </p>
+                      {reviewType === 'pr' && pullNumber && !reviewResult.merged && (
+                        <p className="text-green-600 text-sm mt-2">
+                          🚀 Ready to merge! Choose your merge option below.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-yellow-700 mb-2">
+                        📊 Review {reviewResult.result?.resumed ? 'resumed' : 'completed'} - found {currentIssues.length} critical/warning issues
+                        {reviewResult.result?.isOwnPR && reviewType === 'pr' && ' in your PR changes'}
+                      </p>
+                      <div className="text-sm text-yellow-600 grid grid-cols-2 gap-4">
+                        <div>• Critical: {currentIssues.filter(i => i.severity === 'high').length}</div>
+                        <div>• Warnings: {currentIssues.filter(i => i.severity === 'medium').length}</div>
+                      </div>
+                      {reviewResult.result?.isOwnPR && (
+                        <p className="text-yellow-600 text-sm mt-2">
+                          💡 Fix these issues to improve your {reviewType === 'pr' ? 'PR' : 'code'} before requesting review from your team!
+                        </p>
+                      )}
+                      {reviewType === 'pr' && (
+                        <p className="text-yellow-600 text-sm mt-2">
+                          🎯 Only analyzing changed lines in this PR - not the entire file
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
+                  {!reviewResult.result?.isOwnPR && (
+                    <p className="text-sm mt-3 opacity-75">
+                      Check your GitHub repository for detailed review comments!
+                    </p>
+                  )}
                 </div>
               ) : (
-                <p className="text-red-700">
-                  ❌ {reviewResult.error}
-                </p>
+                <div>
+                  {/* CLEAN ERROR DISPLAY - ONLY SOLUTION */}
+                  {reviewResult.error?.includes('Can not request changes on your own pull request') ? (
+                    <div className="bg-blue-100 border border-blue-300 rounded-lg p-4">
+                      <p className="text-blue-800 font-medium mb-2">
+                        💡 Note: You can now review your own pull requests with ReviewAI Pro!
+                      </p>
+                      <ul className="text-blue-700 text-sm ml-4 list-disc space-y-1">
+                        <li>ReviewAI Pro allows reviewing your own PRs for comprehensive analysis</li>
+                        <li>Or switch to "Main Branch Review" to review the entire repository</li>
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="text-red-700">
+                      ❌ {reviewResult.error}
+                    </p>
+                  )}
+                </div>
               )}
             </motion.div>
           )}
 
-          {/* Issues by File */}
+          {/* NEW: Merge Options - Show when PR review is complete and no critical issues */}
+          {showMergeOptions && reviewResult?.success && reviewType === 'pr' && pullNumber && !reviewResult.merged && (
+            <motion.div
+              className="bg-white rounded-xl border border-gray-200 p-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">🚀 Ready to Merge</h3>
+              <p className="text-gray-600 mb-4">
+                Great! Your pull request has passed the code review. Choose how you'd like to merge:
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <motion.button
+                  onClick={handleAIMerge}
+                  disabled={loading}
+                  className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
+                  whileHover={{ 
+                    scale: 1.02, 
+                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.1 }}
+                >
+                  <div className="p-2 bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg">
+                    <GitMerge size={20} className="text-white" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium text-gray-900">AI Auto-Merge</p>
+                    <p className="text-sm text-gray-500">Let ReviewAI merge with optimized commit message</p>
+                  </div>
+                </motion.button>
+
+                <motion.button
+                  onClick={handleManualMerge}
+                  className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
+                  whileHover={{ 
+                    scale: 1.02, 
+                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.1 }}
+                >
+                  <div className="p-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg">
+                    <ExternalLink size={20} className="text-white" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium text-gray-900">Manual Merge</p>
+                    <p className="text-sm text-gray-500">Open GitHub to merge manually</p>
+                  </div>
+                </motion.button>
+              </div>
+
+              <div className="mt-4 p-4 bg-green-50 rounded-lg">
+                <h4 className="font-medium text-green-900 mb-2">✅ Review Summary:</h4>
+                <ul className="text-sm text-green-800 space-y-1">
+                  <li>• No critical issues found</li>
+                  <li>• Code follows best practices</li>
+                  <li>• Ready for production deployment</li>
+                  <li>• All changes have been reviewed</li>
+                </ul>
+              </div>
+            </motion.div>
+          )}
+
+          {/* NEW: File Changes Display - SHOW WHAT WAS CHANGED */}
+          {reviewResult?.success && reviewResult.result?.fileChanges && reviewResult.result.fileChanges.length > 0 && (
+            <motion.div
+              className="bg-white rounded-xl border border-gray-200 p-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                📁 Files Changed ({reviewResult.result.fileChanges.length})
+                {reviewType === 'pr' && ' in This Pull Request'}
+              </h3>
+              
+              <div className="space-y-4">
+                {reviewResult.result.fileChanges.map((fileChange: FileChange, index: number) => (
+                  <div key={fileChange.filename} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <motion.div
+                      className="bg-gray-50 px-4 py-3 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => toggleFileExpansion(fileChange.filename)}
+                      whileHover={{ scale: 1.01 }}
+                      transition={{ duration: 0.1 }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            {expandedFiles.has(fileChange.filename) ? (
+                              <Minus size={16} className="text-gray-500" />
+                            ) : (
+                              <Plus size={16} className="text-gray-500" />
+                            )}
+                            <FileText size={16} className="text-gray-500" />
+                          </div>
+                          <span className="font-medium text-gray-900">{fileChange.filename}</span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(fileChange.status)}`}>
+                            {fileChange.status}
+                          </span>
+                          {fileChange.changedLines.length > 0 && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                              {fileChange.changedLines.length} lines changed
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                          {fileChange.additions > 0 && (
+                            <span className="text-green-600">+{fileChange.additions}</span>
+                          )}
+                          {fileChange.deletions > 0 && (
+                            <span className="text-red-600">-{fileChange.deletions}</span>
+                          )}
+                          <span className="text-gray-500">{fileChange.changes} changes</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                    
+                    {/* Expandable Diff Content */}
+                    <AnimatePresence>
+                      {expandedFiles.has(fileChange.filename) && fileChange.patch && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="bg-gray-900 text-gray-100 p-4 font-mono text-sm overflow-x-auto">
+                            <div className="flex items-center gap-2 mb-3 text-gray-400">
+                              <Code size={16} />
+                              <span>Diff for {fileChange.filename}</span>
+                            </div>
+                            <div className="space-y-1">
+                              {fileChange.patch.split('\n').map((line, lineIndex) => {
+                                const formatted = formatPatchLine(line);
+                                return (
+                                  <div
+                                    key={lineIndex}
+                                    className={`${
+                                      formatted.type === 'addition'
+                                        ? 'bg-green-900/30 text-green-200'
+                                        : formatted.type === 'deletion'
+                                        ? 'bg-red-900/30 text-red-200'
+                                        : formatted.type === 'hunk'
+                                        ? 'bg-blue-900/30 text-blue-200 font-semibold'
+                                        : formatted.type === 'meta'
+                                        ? 'text-gray-500'
+                                        : 'text-gray-300'
+                                    } px-2 py-0.5 rounded`}
+                                  >
+                                    <span className="select-none mr-2 text-gray-500 text-xs">
+                                      {lineIndex + 1}
+                                    </span>
+                                    {formatted.content}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Issues by File - ONLY CRITICAL AND WARNINGS */}
           {reviewResult?.success && currentIssues.length > 0 && (
             <motion.div
               className="bg-white rounded-xl border border-gray-200 p-6"
@@ -489,7 +1217,8 @@ const TestReview: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
             >
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Issues Found ({currentIssues.length})
+                Critical & Warning Issues ({currentIssues.length})
+                {reviewResult.result?.isOwnPR && reviewType === 'pr' && ' in Your PR Changes'}
               </h3>
               
               <div className="space-y-4">
@@ -500,6 +1229,11 @@ const TestReview: React.FC = () => {
                         <FileText size={16} className="text-gray-500" />
                         <span className="font-medium text-gray-900">{fileName}</span>
                         <span className="text-sm text-gray-500">({fileIssues.length} issues)</span>
+                        {reviewType === 'pr' && (
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                            Changed lines only
+                          </span>
+                        )}
                       </div>
                     </div>
                     
@@ -551,7 +1285,7 @@ const TestReview: React.FC = () => {
             >
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Fix Issues</h3>
               <p className="text-gray-600 mb-4">
-                {currentIssues.length} issues were found. Choose how you'd like to fix them:
+                {currentIssues.length} critical/warning issues were found{reviewResult.result?.isOwnPR && reviewType === 'pr' ? ' in your PR changes' : ''}. Choose how you'd like to fix them:
               </p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -608,20 +1342,32 @@ const TestReview: React.FC = () => {
             <ul className="space-y-2 text-sm text-gray-600">
               <li className="flex items-center gap-2">
                 <GitBranch size={16} />
-                Analyzes all files in the repository for code quality issues
+                {reviewType === 'pr' 
+                  ? 'Analyzes only the changed lines in your pull request'
+                  : 'Analyzes all files in the repository for code quality issues'
+                }
               </li>
               <li className="flex items-center gap-2">
                 <AlertTriangle size={16} />
-                Detects bugs, security vulnerabilities, and performance problems
+                Detects critical bugs, security vulnerabilities, and important warnings
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle size={16} />
-                Posts detailed review comments on GitHub with fixes
+                {reviewType === 'pr' && reviewResult?.result?.isOwnPR
+                  ? 'Provides feedback on your changes without posting GitHub comments'
+                  : 'Posts detailed review comments on GitHub with fixes'
+                }
               </li>
               <li className="flex items-center gap-2">
                 <Clock size={16} />
                 Provides actionable suggestions and auto-fix options
               </li>
+              {reviewType === 'pr' && (
+                <li className="flex items-center gap-2">
+                  <GitMerge size={16} />
+                  Offers merge options when review passes with no critical issues
+                </li>
+              )}
             </ul>
           </motion.div>
         </div>
@@ -640,27 +1386,64 @@ const TestReview: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Confirmation Modal - ONLY FOR "FIX ALL" ACTION */}
+      {/* Confirmation Modal - FOR ALL ACTIONS */}
       <AnimatePresence>
-        {showConfirmation && confirmationAction === 'all' && (
+        {showConfirmation && (
           <ConfirmationModal
             isOpen={showConfirmation}
             onClose={() => {
               setShowConfirmation(false);
               setConfirmationAction(null);
             }}
-            onConfirm={handleConfirmAIFixAll}
-            title="Confirm AI Fix All"
-            message={`Are you sure you want to apply AI fixes to ALL ${currentIssues.length} issues? This will:
+            onConfirm={
+              confirmationAction === 'all' ? handleConfirmAIFixAll :
+              confirmationAction === 'merge-ai' ? handleConfirmAIMerge :
+              confirmationAction === 'merge-manual' ? handleConfirmManualMerge :
+              () => {}
+            }
+            title={
+              confirmationAction === 'all' ? 'Confirm AI Fix All' :
+              confirmationAction === 'merge-ai' ? 'Confirm AI Merge' :
+              confirmationAction === 'merge-manual' ? 'Confirm Manual Merge' :
+              'Confirm Action'
+            }
+            message={
+              confirmationAction === 'all' ? 
+                `Are you sure you want to apply AI fixes to ALL ${currentIssues.length} critical/warning issues? This will:
 
-• Fix ALL critical, warning, and info issues
+• Fix ALL critical and warning issues
 • Create commits in your repository  
 • Mark ALL issues as resolved
 • Complete the review process
 
-This action cannot be undone.`}
-            confirmText="Fix All Issues"
-            type="warning"
+This action cannot be undone.` :
+              confirmationAction === 'merge-ai' ?
+                `Are you sure you want to merge this pull request using AI? This will:
+
+• Merge PR #${pullNumber} into the base branch
+• Create an optimized commit message
+• Complete the pull request
+• Deploy changes to production
+
+This action cannot be undone.` :
+              confirmationAction === 'merge-manual' ?
+                `This will open GitHub in a new tab where you can manually merge the pull request.
+
+You'll have full control over:
+• Merge method (merge, squash, rebase)
+• Commit message
+• Final review before merging
+
+Continue to GitHub?` :
+                'Are you sure you want to proceed?'
+            }
+            confirmText={
+              confirmationAction === 'all' ? 'Fix All Issues' :
+              confirmationAction === 'merge-ai' ? 'Merge with AI' :
+              confirmationAction === 'merge-manual' ? 'Open GitHub' :
+              'Confirm'
+            }
+            type={confirmationAction === 'merge-manual' ? 'info' : 'warning'}
             loading={loading}
           />
         )}

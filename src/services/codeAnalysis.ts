@@ -50,6 +50,51 @@ export class CodeAnalysisService {
     return this.generateFileHash(key);
   }
 
+  // NEW: Analyze only specific changed lines in a file (for PR reviews)
+  async analyzeChangedLines(fileContent: string, fileName: string, language: string, changedLines: number[]): Promise<AnalysisResult> {
+    try {
+      console.log(`Analyzing ${changedLines.length} changed lines in ${fileName}`);
+      
+      if (changedLines.length === 0) {
+        return {
+          issues: [],
+          metrics: { complexity: 0, maintainability: 100 },
+          suggestions: [],
+        };
+      }
+
+      // Perform static analysis only on changed lines
+      const staticIssues = this.performStaticAnalysisOnLines(fileContent, fileName, language, changedLines);
+      
+      // Filter out info-level issues immediately
+      const filteredIssues = staticIssues.filter(issue => 
+        issue.severity === 'high' || issue.severity === 'medium'
+      );
+      
+      // Add consistent IDs and hashes
+      const finalIssues = filteredIssues.map(issue => ({
+        ...issue,
+        hash: this.generateIssueHash(issue),
+        id: this.generateIssueId(issue)
+      }));
+
+      console.log(`Found ${finalIssues.length} critical/warning issues in changed lines`);
+      
+      return {
+        issues: finalIssues,
+        metrics: { complexity: 1, maintainability: 90 },
+        suggestions: finalIssues.length > 0 ? ['Review and fix the identified issues in your changes'] : [],
+      };
+    } catch (error) {
+      console.error('Changed lines analysis failed:', error);
+      return {
+        issues: [],
+        metrics: { complexity: 0, maintainability: 0 },
+        suggestions: [],
+      };
+    }
+  }
+
   async analyzeCode(fileContent: string, fileName: string, language: string): Promise<AnalysisResult> {
     try {
       const fileHash = this.generateFileHash(fileContent);
@@ -57,8 +102,12 @@ export class CodeAnalysisService {
       // Check cache first for consistent results
       if (this.issueCache.has(fileHash)) {
         const cachedIssues = this.issueCache.get(fileHash)!;
+        // Filter out info issues from cached results too
+        const filteredCached = cachedIssues.filter(issue => 
+          issue.severity === 'high' || issue.severity === 'medium'
+        );
         return {
-          issues: cachedIssues,
+          issues: filteredCached,
           metrics: { complexity: 2, maintainability: 85 },
           suggestions: ['Consider adding unit tests', 'Review code documentation'],
           fileHash
@@ -75,8 +124,13 @@ export class CodeAnalysisService {
       const allIssues = [...staticIssues, ...aiAnalysis.issues];
       const uniqueIssues = this.deduplicateIssues(allIssues);
       
+      // CRITICAL: Filter out info-level issues
+      const filteredIssues = uniqueIssues.filter(issue => 
+        issue.severity === 'high' || issue.severity === 'medium'
+      );
+      
       // Add consistent IDs and hashes
-      const finalIssues = uniqueIssues.map(issue => ({
+      const finalIssues = filteredIssues.map(issue => ({
         ...issue,
         hash: this.generateIssueHash(issue),
         id: this.generateIssueId(issue)
@@ -99,6 +153,164 @@ export class CodeAnalysisService {
         suggestions: [],
       };
     }
+  }
+
+  // NEW: Analyze only specific lines (for PR changed lines)
+  private performStaticAnalysisOnLines(content: string, fileName: string, language: string, targetLines: number[]): CodeIssue[] {
+    const issues: CodeIssue[] = [];
+    const lines = content.split('\n');
+    const targetLineSet = new Set(targetLines);
+
+    lines.forEach((line, index) => {
+      const lineNumber = index + 1;
+      
+      // CRITICAL: Only analyze lines that were changed in the PR
+      if (!targetLineSet.has(lineNumber)) {
+        return;
+      }
+      
+      const trimmedLine = line.trim();
+      
+      // Skip empty lines and comments
+      if (!trimmedLine || trimmedLine.startsWith('//') || trimmedLine.startsWith('/*') || trimmedLine.startsWith('*')) {
+        return;
+      }
+      
+      if (language === 'javascript' || language === 'typescript') {
+        // Console.log detection - HIGH PRIORITY FOR PRODUCTION CODE
+        if (line.includes('console.log') && !line.includes('//')) {
+          const originalCode = line;
+          const suggestedCode = line.replace(/console\.log\([^)]*\);?/, '// TODO: Remove console.log for production');
+          
+          issues.push({
+            type: 'warning',
+            severity: 'medium', // Upgraded from low to medium for production readiness
+            file: fileName,
+            line: lineNumber,
+            message: 'Console.log statement should be removed for production',
+            rule: 'no-console',
+            suggestion: 'Remove console.log statements or use proper logging library',
+            fixable: true,
+            originalCode,
+            suggestedCode,
+          });
+        }
+
+        // Missing semicolons - CRITICAL FOR CODE CONSISTENCY
+        if (this.shouldHaveSemicolon(trimmedLine) && !trimmedLine.endsWith(';')) {
+          const suggestedCode = line + ';';
+          
+          issues.push({
+            type: 'error',
+            severity: 'high', // Upgraded to high for consistency
+            file: fileName,
+            line: lineNumber,
+            message: 'Missing semicolon',
+            rule: 'semi',
+            suggestion: 'Add semicolon at end of statement',
+            fixable: true,
+            originalCode: line,
+            suggestedCode,
+          });
+        }
+
+        // Double equals instead of triple equals - CRITICAL FOR TYPE SAFETY
+        if (line.includes('==') && !line.includes('===') && !line.includes('!==')) {
+          const suggestedCode = line.replace(/([^=!])={2}([^=])/g, '$1===$2').replace(/!={2}([^=])/g, '!==$1');
+          
+          issues.push({
+            type: 'warning',
+            severity: 'high', // Upgraded to high for type safety
+            file: fileName,
+            line: lineNumber,
+            message: 'Use strict equality (===) instead of loose equality (==)',
+            rule: 'eqeqeq',
+            suggestion: 'Use === and !== for strict equality checks',
+            fixable: true,
+            originalCode: line,
+            suggestedCode,
+          });
+        }
+
+        // Missing error handling for async/await - CRITICAL FOR RELIABILITY
+        if (line.includes('await ') && !this.hasErrorHandling(lines, index)) {
+          const indent = line.match(/^\s*/)?.[0] || '';
+          const awaitLine = line.trim();
+          const suggestedCode = `${indent}try {\n${line}\n${indent}} catch (error) {\n${indent}  console.error('Error:', error);\n${indent}}`;
+          
+          issues.push({
+            type: 'warning',
+            severity: 'high', // Upgraded to high for reliability
+            file: fileName,
+            line: lineNumber,
+            message: 'Async operation without error handling',
+            rule: 'require-await-error-handling',
+            suggestion: 'Wrap await calls in try-catch blocks',
+            fixable: true,
+            originalCode: line,
+            suggestedCode,
+          });
+        }
+
+        // Unused variables (basic detection) - MEDIUM PRIORITY
+        const varMatch = trimmedLine.match(/^(let|const|var)\s+(\w+)/);
+        if (varMatch) {
+          const varName = varMatch[2];
+          const restOfFile = lines.slice(index + 1).join('\n');
+          if (!restOfFile.includes(varName) && varName !== '_') {
+            const suggestedCode = line.replace(varName, `_${varName}`);
+            
+            issues.push({
+              type: 'warning',
+              severity: 'medium',
+              file: fileName,
+              line: lineNumber,
+              message: `Variable '${varName}' is declared but never used`,
+              rule: 'no-unused-vars',
+              suggestion: `Prefix with underscore to indicate intentional non-use`,
+              fixable: true,
+              originalCode: line,
+              suggestedCode,
+            });
+          }
+        }
+      }
+
+      // Security issues - ALWAYS HIGH PRIORITY
+      if (line.includes('eval(')) {
+        issues.push({
+          type: 'error',
+          severity: 'high',
+          file: fileName,
+          line: lineNumber,
+          message: 'Use of eval() is dangerous and should be avoided',
+          rule: 'no-eval',
+          suggestion: 'Replace eval() with safer alternatives like JSON.parse() or proper function calls',
+          fixable: false, // Too complex to auto-fix safely
+          originalCode: line,
+        });
+      }
+
+      if (line.includes('innerHTML') && line.includes('=')) {
+        const suggestedCode = line.replace(/\.innerHTML\s*=/, '.textContent =');
+        
+        issues.push({
+          type: 'error',
+          severity: 'high',
+          file: fileName,
+          line: lineNumber,
+          message: 'Potential XSS vulnerability with innerHTML',
+          rule: 'no-inner-html',
+          suggestion: 'Use textContent or sanitize HTML content before setting innerHTML',
+          fixable: true,
+          originalCode: line,
+          suggestedCode,
+        });
+      }
+    });
+
+    console.log(`Found ${issues.length} issues in ${targetLines.length} changed lines`);
+    return issues;
   }
 
   private deduplicateIssues(issues: CodeIssue[]): CodeIssue[] {
@@ -138,7 +350,7 @@ export class CodeAnalysisService {
           
           issues.push({
             type: 'warning',
-            severity: 'low',
+            severity: 'medium', // Upgraded from low
             file: fileName,
             line: lineNumber,
             message: 'Console.log statement should be removed for production',
@@ -150,74 +362,56 @@ export class CodeAnalysisService {
           });
         }
 
-        // TODO/FIXME comments - Make these fixable by converting to proper issues
-        if (line.includes('TODO') || line.includes('FIXME')) {
-          const originalCode = line;
-          const todoText = line.match(/(TODO|FIXME):?\s*(.+)/i)?.[2] || 'Address this item';
-          const suggestedCode = line.replace(/(TODO|FIXME):?\s*/i, `// ISSUE: ${todoText} - `);
-          
-          issues.push({
-            type: 'info',
-            severity: 'low',
-            file: fileName,
-            line: lineNumber,
-            message: 'TODO/FIXME comment found',
-            rule: 'no-todo',
-            suggestion: 'Convert TODO to proper issue tracker item or address immediately',
-            fixable: true,
-            originalCode,
-            suggestedCode,
-          });
-        }
-
-        // Long lines (>120 characters) - Enhanced fixing
-        if (line.length > 120) {
-          const indent = line.match(/^\s*/)?.[0] || '';
-          let suggestedCode = line;
-          
-          // Try to break at logical points
-          if (line.includes('&&') || line.includes('||')) {
-            const operators = line.split(/(\s+&&\s+|\s+\|\|\s+)/);
-            if (operators.length > 1) {
-              suggestedCode = operators[0] + '\n' + indent + '  ' + operators.slice(1).join('');
-            }
-          } else if (line.includes(',') && line.includes('(')) {
-            // Break function parameters
-            suggestedCode = line.replace(/,\s*/g, ',\n' + indent + '  ');
-          } else {
-            // Simple break at space
-            const breakPoint = line.lastIndexOf(' ', 100);
-            if (breakPoint > 0) {
-              suggestedCode = line.substring(0, breakPoint) + '\n' + indent + '  ' + line.substring(breakPoint + 1);
-            }
-          }
-
-          issues.push({
-            type: 'info',
-            severity: 'low',
-            file: fileName,
-            line: lineNumber,
-            message: `Line too long (${line.length} characters, max 120)`,
-            rule: 'max-len',
-            suggestion: 'Break long lines for better readability',
-            fixable: true,
-            originalCode: line,
-            suggestedCode,
-          });
-        }
-
         // Missing semicolons
         if (this.shouldHaveSemicolon(trimmedLine) && !trimmedLine.endsWith(';')) {
           const suggestedCode = line + ';';
           
           issues.push({
             type: 'error',
-            severity: 'medium',
+            severity: 'high', // Upgraded to high
             file: fileName,
             line: lineNumber,
             message: 'Missing semicolon',
             rule: 'semi',
             suggestion: 'Add semicolon at end of statement',
+            fixable: true,
+            originalCode: line,
+            suggestedCode,
+          });
+        }
+
+        // Double equals instead of triple equals
+        if (line.includes('==') && !line.includes('===') && !line.includes('!==')) {
+          const suggestedCode = line.replace(/([^=!])={2}([^=])/g, '$1===$2').replace(/!={2}([^=])/g, '!==$1');
+          
+          issues.push({
+            type: 'warning',
+            severity: 'high', // Upgraded to high
+            file: fileName,
+            line: lineNumber,
+            message: 'Use strict equality (===) instead of loose equality (==)',
+            rule: 'eqeqeq',
+            suggestion: 'Use === and !== for strict equality checks',
+            fixable: true,
+            originalCode: line,
+            suggestedCode,
+          });
+        }
+
+        // Missing error handling for async/await
+        if (line.includes('await ') && !this.hasErrorHandling(lines, index)) {
+          const indent = line.match(/^\s*/)?.[0] || '';
+          const awaitLine = line.trim();
+          const suggestedCode = `${indent}try {\n${line}\n${indent}} catch (error) {\n${indent}  console.error('Error:', error);\n${indent}}`;
+          
+          issues.push({
+            type: 'warning',
+            severity: 'high', // Upgraded to high
+            file: fileName,
+            line: lineNumber,
+            message: 'Async operation without error handling',
+            rule: 'require-await-error-handling',
+            suggestion: 'Wrap await calls in try-catch blocks',
             fixable: true,
             originalCode: line,
             suggestedCode,
@@ -240,132 +434,6 @@ export class CodeAnalysisService {
               message: `Variable '${varName}' is declared but never used`,
               rule: 'no-unused-vars',
               suggestion: `Prefix with underscore to indicate intentional non-use`,
-              fixable: true,
-              originalCode: line,
-              suggestedCode,
-            });
-          }
-        }
-
-        // Missing error handling for async/await
-        if (line.includes('await ') && !this.hasErrorHandling(lines, index)) {
-          const indent = line.match(/^\s*/)?.[0] || '';
-          const awaitLine = line.trim();
-          const suggestedCode = `${indent}try {\n${line}\n${indent}} catch (error) {\n${indent}  console.error('Error:', error);\n${indent}}`;
-          
-          issues.push({
-            type: 'warning',
-            severity: 'medium',
-            file: fileName,
-            line: lineNumber,
-            message: 'Async operation without error handling',
-            rule: 'require-await-error-handling',
-            suggestion: 'Wrap await calls in try-catch blocks',
-            fixable: true,
-            originalCode: line,
-            suggestedCode,
-          });
-        }
-
-        // Hardcoded strings that should be constants - Enhanced fixing
-        const stringMatch = line.match(/"([^"]{10,})"/g);
-        if (stringMatch && !line.includes('console.log') && !line.includes('import') && !line.includes('require')) {
-          const longString = stringMatch[0];
-          const constantName = this.generateConstantName(longString);
-          const suggestedCode = line.replace(longString, constantName);
-          
-          issues.push({
-            type: 'info',
-            severity: 'low',
-            file: fileName,
-            line: lineNumber,
-            message: 'Consider extracting long string to a constant',
-            rule: 'no-hardcoded-strings',
-            suggestion: `Extract to: const ${constantName} = ${longString};`,
-            fixable: true,
-            originalCode: line,
-            suggestedCode,
-          });
-        }
-
-        // Double equals instead of triple equals
-        if (line.includes('==') && !line.includes('===') && !line.includes('!==')) {
-          const suggestedCode = line.replace(/([^=!])={2}([^=])/g, '$1===$2').replace(/!={2}([^=])/g, '!==$1');
-          
-          issues.push({
-            type: 'warning',
-            severity: 'medium',
-            file: fileName,
-            line: lineNumber,
-            message: 'Use strict equality (===) instead of loose equality (==)',
-            rule: 'eqeqeq',
-            suggestion: 'Use === and !== for strict equality checks',
-            fixable: true,
-            originalCode: line,
-            suggestedCode,
-          });
-        }
-
-        // Missing const for variables that are never reassigned
-        const letMatch = trimmedLine.match(/^let\s+(\w+)\s*=\s*(.+);?$/);
-        if (letMatch) {
-          const varName = letMatch[1];
-          const restOfFile = lines.slice(index + 1).join('\n');
-          // Simple check: if variable is not reassigned (no "varName =")
-          if (!restOfFile.includes(`${varName} =`) && !restOfFile.includes(`${varName}++`) && !restOfFile.includes(`${varName}--`)) {
-            const suggestedCode = line.replace(/^(\s*)let\s+/, '$1const ');
-            
-            issues.push({
-              type: 'info',
-              severity: 'low',
-              file: fileName,
-              line: lineNumber,
-              message: `Variable '${varName}' is never reassigned, use 'const' instead of 'let'`,
-              rule: 'prefer-const',
-              suggestion: 'Use const for variables that are never reassigned',
-              fixable: true,
-              originalCode: line,
-              suggestedCode,
-            });
-          }
-        }
-
-        // Function expressions that could be arrow functions
-        const funcMatch = trimmedLine.match(/^(\s*)(const|let|var)\s+(\w+)\s*=\s*function\s*\(([^)]*)\)\s*\{/);
-        if (funcMatch) {
-          const [, indent, keyword, funcName, params] = funcMatch;
-          const suggestedCode = `${indent}${keyword} ${funcName} = (${params}) => {`;
-          
-          issues.push({
-            type: 'info',
-            severity: 'low',
-            file: fileName,
-            line: lineNumber,
-            message: 'Function expression can be converted to arrow function',
-            rule: 'prefer-arrow-callback',
-            suggestion: 'Use arrow functions for better readability',
-            fixable: true,
-            originalCode: line,
-            suggestedCode,
-          });
-        }
-
-        // Missing JSDoc for functions
-        if (trimmedLine.match(/^(export\s+)?(async\s+)?function\s+\w+/) || trimmedLine.match(/^(export\s+)?(const|let)\s+\w+\s*=\s*(async\s+)?\(/)) {
-          const prevLine = index > 0 ? lines[index - 1].trim() : '';
-          if (!prevLine.startsWith('/**') && !prevLine.startsWith('//')) {
-            const indent = line.match(/^\s*/)?.[0] || '';
-            const funcName = line.match(/function\s+(\w+)|(\w+)\s*=/)?.[1] || 'function';
-            const suggestedCode = `${indent}/**\n${indent} * ${funcName} description\n${indent} */\n${line}`;
-            
-            issues.push({
-              type: 'info',
-              severity: 'low',
-              file: fileName,
-              line: lineNumber,
-              message: 'Function missing JSDoc documentation',
-              rule: 'require-jsdoc',
-              suggestion: 'Add JSDoc comments for better documentation',
               fixable: true,
               originalCode: line,
               suggestedCode,
@@ -405,39 +473,9 @@ export class CodeAnalysisService {
           suggestedCode,
         });
       }
-
-      // Performance issues
-      if (line.includes('document.getElementById') && lines.filter(l => l.includes('document.getElementById')).length > 3) {
-        const elementId = line.match(/getElementById\(['"]([^'"]+)['"]\)/)?.[1];
-        if (elementId) {
-          const suggestedCode = line.replace(/document\.getElementById\(['"]([^'"]+)['"]\)/, `this.${elementId}Element || (this.${elementId}Element = document.getElementById('${elementId}'))`);
-          
-          issues.push({
-            type: 'info',
-            severity: 'low',
-            file: fileName,
-            line: lineNumber,
-            message: 'Multiple DOM queries detected - consider caching',
-            rule: 'cache-dom-queries',
-            suggestion: 'Cache DOM element references to improve performance',
-            fixable: true,
-            originalCode: line,
-            suggestedCode,
-          });
-        }
-      }
     });
 
     return issues;
-  }
-
-  private generateConstantName(str: string): string {
-    // Extract meaningful words from string and create constant name
-    const cleaned = str.replace(/['"]/g, '').replace(/[^a-zA-Z0-9\s]/g, ' ');
-    const words = cleaned.split(/\s+/).filter(w => w.length > 2).slice(0, 3);
-    return words.length > 0 
-      ? words.map(w => w.toUpperCase()).join('_') + '_TEXT'
-      : 'CONSTANT_TEXT';
   }
 
   private shouldHaveSemicolon(line: string): boolean {
