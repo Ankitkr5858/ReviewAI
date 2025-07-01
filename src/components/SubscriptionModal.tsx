@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
   Check,
-  Crown,
+  Wand2,
   Zap,
   Shield,
   Clock,
@@ -43,6 +43,7 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ onClose }) => {
       name: 'Pro',
       monthlyPrice: '$15',
       annualPrice: '$12',
+      originalPrice: '$15',
       period: 'USD/user/month',
       description: 'For professional developers',
       features: [
@@ -59,6 +60,7 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ onClose }) => {
       name: 'Team',
       monthlyPrice: '$25',
       annualPrice: '$20',
+      originalPrice: '$25',
       period: 'USD/user/month',
       description: 'For development teams',
       features: [
@@ -99,6 +101,39 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ onClose }) => {
       setProcessing(false);
     }
   };
+
+  const getButtonText = (plan: any) => {
+    if (plan.current) {
+      return 'Current Plan';
+    }
+    
+    // If current plan is higher tier, show downgrade
+    if (currentPlan.type === 'pro' && plan.name === 'Free') {
+      return 'Downgrade Plan';
+    }
+    if (currentPlan.type === 'team' && (plan.name === 'Free' || plan.name === 'Pro')) {
+      return 'Downgrade Plan';
+    }
+    
+    // Otherwise show upgrade
+    return plan.name === 'Free' ? 'Get Started Free' : `Upgrade to ${plan.name}`;
+  };
+
+  const getButtonAction = (plan: any) => {
+    if (plan.current) return () => {};
+    
+    if (plan.name === 'Free') {
+      // Handle downgrade logic here
+      return () => alert('Downgrade functionality would be implemented here');
+    }
+    
+    return () => {
+      if (plan.name === 'Pro') handleUpgrade('pro');
+      if (plan.name === 'Team') handleUpgrade('team');
+    };
+  };
+
+  if (!onClose) return null;
 
   return (
     <motion.div
@@ -142,12 +177,12 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ onClose }) => {
           </div>
         ) : (
           <>
-            {/* Header */}
+            {/* Header - FIXED LOGO */}
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-black rounded-lg">
-                    <Crown size={24} className="text-white" />
+                  <div className="p-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl">
+                    <Wand2 size={24} className="text-white" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900">Upgrade to Pro</h2>
@@ -187,13 +222,13 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ onClose }) => {
               </div>
             </div>
 
-            {/* SIMPLE HEADER */}
-            <div className="p-6 text-center border-b border-gray-200">
+            {/* EXACT DASHBOARD PRICING DESIGN */}
+            <div className="p-6 text-center">
               <h3 className="text-3xl font-bold text-gray-900 mb-2">Simple, transparent pricing</h3>
               <p className="text-lg text-gray-600 mb-6">Start free, scale as you grow</p>
               
               {/* BILLING TOGGLE */}
-              <div className="flex items-center justify-center gap-4 mb-2">
+              <div className="flex items-center justify-center gap-4 mb-8">
                 <span className={`text-sm font-medium ${billingCycle === 'monthly' ? 'text-gray-900' : 'text-gray-500'}`}>
                   Monthly
                 </span>
@@ -217,114 +252,107 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ onClose }) => {
                   </span>
                 )}
               </div>
-            </div>
 
-            {/* SIMPLE PRICING CARDS - UPDATED PRICES */}
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+              {/* PRICING CARDS - EXACT DASHBOARD STYLE */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
                 {plans.map((plan, index) => (
                   <motion.div
                     key={plan.name}
                     className={`relative p-6 border-2 rounded-2xl bg-white transition-all ${
-                      plan.popular 
+                      plan.current 
+                        ? 'border-blue-500 shadow-lg' 
+                        : plan.popular && !plan.current
                         ? 'border-indigo-500 shadow-lg' 
                         : 'border-gray-200 hover:border-gray-300'
-                    } ${plan.current ? 'opacity-75' : ''}`}
+                    }`}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: index * 0.1 }}
-                    whileHover={{ scale: plan.current ? 1 : 1.02 }}
+                    whileHover={{ scale: 1.02 }}
                   >
-                    {plan.popular && (
-                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                        <div className="bg-indigo-500 text-white px-4 py-1 rounded-full text-sm font-medium flex items-center gap-1 whitespace-nowrap">
-                          <Sparkles size={14} />
-                          Most Popular
-                        </div>
-                      </div>
-                    )}
-
+                    {/* CURRENT PLAN BADGE - FIXED POSITIONING */}
                     {plan.current && (
-                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                        <div className="bg-green-500 text-white px-4 py-1 rounded-full text-sm font-medium flex items-center gap-1 whitespace-nowrap">
+                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10">
+                        <div className="bg-green-500 text-white px-4 py-1 rounded-full text-sm font-medium flex items-center gap-1 whitespace-nowrap shadow-lg">
                           <CheckCircle size={14} />
                           Current Plan
                         </div>
                       </div>
                     )}
 
-                    <div className="mb-4">
-                      <h3 className="text-xl font-bold text-gray-900 mb-2">{plan.name}</h3>
-                      <p className="text-gray-600 text-sm">{plan.description}</p>
-                    </div>
+                    {/* POPULAR BADGE */}
+                    {plan.popular && !plan.current && (
+                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10">
+                        <div className="bg-indigo-500 text-white px-4 py-1 rounded-full text-sm font-medium flex items-center gap-1 whitespace-nowrap shadow-lg">
+                          <Sparkles size={14} />
+                          Popular
+                        </div>
+                      </div>
+                    )}
 
-                    <div className="mb-6">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-bold text-gray-900">
-                          {getCurrentPrice(plan)}
-                        </span>
-                        {plan.name !== 'Free' && (
-                          <>
-                            {billingCycle === 'annual' && (
-                              <span className="text-lg line-through text-gray-400">
-                                {plan.monthlyPrice}
-                              </span>
-                            )}
-                          </>
+                    {/* CARD CONTENT - ADDED PADDING TOP TO PREVENT OVERLAP */}
+                    <div className={plan.current || plan.popular ? 'pt-4' : ''}>
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">{plan.name}</h3>
+                      <p className="text-gray-600 text-sm mb-4">{plan.description}</p>
+
+                      <div className="mb-6">
+                        <div className="flex items-baseline justify-center gap-2 mb-1">
+                          <span className="text-3xl font-bold text-gray-900">
+                            {getCurrentPrice(plan)}
+                          </span>
+                          {plan.name !== 'Free' && billingCycle === 'annual' && (
+                            <span className="text-lg line-through text-gray-400">
+                              {plan.originalPrice}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-600">{plan.period}</div>
+                        {plan.name !== 'Free' && billingCycle === 'annual' && plan.savings && (
+                          <p className="text-sm text-green-600 mt-1 font-medium">{plan.savings}</p>
                         )}
                       </div>
-                      <div className="text-sm text-gray-600 mt-1">{plan.period}</div>
-                      {plan.name !== 'Free' && billingCycle === 'annual' && plan.savings && (
-                        <p className="text-sm text-green-600 mt-1 font-medium">{plan.savings}</p>
-                      )}
+
+                      <ul className="space-y-3 mb-8 text-left">
+                        {plan.features.map((feature, featureIndex) => (
+                          <li key={featureIndex} className="flex items-center gap-2">
+                            <Check size={16} className="text-green-600 flex-shrink-0" />
+                            <span className="text-gray-700 text-sm">{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+
+                      <motion.button
+                        onClick={getButtonAction(plan)}
+                        disabled={plan.current || processing}
+                        className={`w-full py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                          plan.current
+                            ? 'border-2 border-gray-300 text-gray-500 cursor-not-allowed bg-gray-50'
+                            : plan.popular && !plan.current
+                            ? 'bg-indigo-500 text-white hover:bg-indigo-600'
+                            : 'border-2 border-gray-300 hover:bg-gray-50 text-gray-900'
+                        }`}
+                        whileHover={!plan.current && !processing ? { scale: 1.05 } : {}}
+                        whileTap={!plan.current && !processing ? { scale: 0.95 } : {}}
+                      >
+                        {processing && (plan.name === 'Pro' ? selectedPlan === 'pro' : selectedPlan === 'team') ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            {!plan.current && <CreditCard size={16} />}
+                            {getButtonText(plan)}
+                          </>
+                        )}
+                      </motion.button>
                     </div>
-
-                    <ul className="space-y-3 mb-8">
-                      {plan.features.map((feature, featureIndex) => (
-                        <li key={featureIndex} className="flex items-center gap-2">
-                          <Check size={16} className="text-green-600 flex-shrink-0" />
-                          <span className="text-gray-700 text-sm">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    <motion.button
-                      onClick={() => {
-                        if (plan.current) return;
-                        if (plan.name === 'Pro') handleUpgrade('pro');
-                        if (plan.name === 'Team') handleUpgrade('team');
-                      }}
-                      disabled={plan.current || processing}
-                      className={`w-full py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                        plan.current
-                          ? 'border-2 border-gray-300 text-gray-500 cursor-not-allowed'
-                          : plan.popular
-                          ? 'bg-indigo-500 text-white hover:bg-indigo-600'
-                          : 'border-2 border-gray-300 hover:bg-gray-50 text-gray-900'
-                      }`}
-                      whileHover={!plan.current && !processing ? { scale: 1.05 } : {}}
-                      whileTap={!plan.current && !processing ? { scale: 0.95 } : {}}
-                    >
-                      {processing && (plan.name === 'Pro' ? selectedPlan === 'pro' : selectedPlan === 'team') ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                          Processing...
-                        </>
-                      ) : plan.current ? (
-                        'Current Plan'
-                      ) : (
-                        <>
-                          <CreditCard size={16} />
-                          {plan.name === 'Pro' ? 'Upgrade to Pro' : 'Upgrade to Team'}
-                        </>
-                      )}
-                    </motion.button>
                   </motion.div>
                 ))}
               </div>
             </div>
 
-            {/* SIMPLE FOOTER */}
+            {/* FOOTER */}
             <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-lg">
               <div className="text-center">
                 <p className="text-sm text-gray-600 mb-2">

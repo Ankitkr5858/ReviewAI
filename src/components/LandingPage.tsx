@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
+import FeedbackSection from './FeedbackSection';
 
 interface LandingPageProps {
   onGetStarted: () => void;
@@ -919,7 +920,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </section>
 
-      {/* Pricing Section - MOVED UP */}
+      {/* Pricing Section - EXACT DASHBOARD PRICING */}
       <section id="pricing" className="py-20 bg-white">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <h2 className="text-4xl font-bold text-gray-900 mb-4">
@@ -950,16 +951,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             </span>
             {billingCycle === 'annual' && (
               <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
-                Save 34%
+                Save 20%
               </span>
             )}
           </div>
 
-          {/* Pricing Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          {/* EXACT DASHBOARD PRICING CARDS */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
             {/* Free Plan */}
             <motion.div
-              className="p-8 border-2 border-gray-200 rounded-2xl bg-white hover:border-gray-300 transition-all"
+              className="p-6 border-2 border-gray-200 rounded-2xl bg-white hover:border-gray-300 transition-all"
               whileHover={{ 
                 scale: 1.02, 
                 y: -5, 
@@ -969,34 +970,34 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Free</h3>
-              <div className="text-4xl font-bold text-gray-900 mb-4">$0</div>
-              <p className="text-gray-600 mb-6">Perfect for personal projects</p>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Free</h3>
+              <p className="text-gray-600 text-sm mb-4">Perfect for personal projects</p>
+              
+              <div className="mb-6">
+                <div className="text-3xl font-bold text-gray-900 mb-1">$0</div>
+                <div className="text-sm text-gray-600">USD/user/month</div>
+              </div>
               
               <ul className="space-y-3 mb-8 text-left">
                 <li className="flex items-center gap-2">
                   <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700">Up to 3 repositories</span>
+                  <span className="text-gray-700 text-sm">Up to 3 repositories</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700">Basic AI reviews</span>
+                  <span className="text-gray-700 text-sm">Basic AI reviews</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700">Community support</span>
+                  <span className="text-gray-700 text-sm">Community support</span>
                 </li>
               </ul>
               
               <motion.button
                 onClick={onGetStarted}
-                className="w-full py-3 border-2 border-gray-300 rounded-full hover:bg-gray-50 transition-colors font-medium text-gray-900"
-                whileHover={{ 
-                  scale: 1.05, 
-                  boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
-                }}
+                className="w-full py-3 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-gray-900"
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                transition={{ duration: 0.1 }}
               >
                 Get Started Free
               </motion.button>
@@ -1004,7 +1005,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
             {/* Pro Plan */}
             <motion.div
-              className="p-8 border-2 border-indigo-500 rounded-2xl bg-white relative shadow-lg"
+              className="relative p-6 border-2 border-indigo-500 rounded-2xl bg-white shadow-lg"
               whileHover={{ 
                 scale: 1.02, 
                 y: -5, 
@@ -1020,57 +1021,58 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 </div>
               </div>
               
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Pro</h3>
-              <div className="flex items-baseline gap-2 mb-4">
-                <div className="text-4xl font-bold text-gray-900">
-                  ${billingCycle === 'annual' ? '19' : '29'}
+              <div className="pt-4">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Pro</h3>
+                <p className="text-gray-600 text-sm mb-4">For professional developers</p>
+
+                <div className="mb-6">
+                  <div className="flex items-baseline justify-center gap-2 mb-1">
+                    <span className="text-3xl font-bold text-gray-900">
+                      ${billingCycle === 'annual' ? '12' : '15'}
+                    </span>
+                    {billingCycle === 'annual' && (
+                      <span className="text-lg line-through text-gray-400">$15</span>
+                    )}
+                  </div>
+                  <div className="text-sm text-gray-600">USD/user/month</div>
+                  {billingCycle === 'annual' && (
+                    <p className="text-sm text-green-600 mt-1 font-medium">Save $36/year</p>
+                  )}
                 </div>
-                {billingCycle === 'annual' && (
-                  <div className="text-lg line-through text-gray-400">$29</div>
-                )}
-                <span className="text-gray-600 whitespace-nowrap">per month</span>
+                
+                <ul className="space-y-3 mb-8 text-left">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle size={16} className="text-green-600" />
+                    <span className="text-gray-700 text-sm">Unlimited repositories</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle size={16} className="text-green-600" />
+                    <span className="text-gray-700 text-sm">Advanced AI reviews</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle size={16} className="text-green-600" />
+                    <span className="text-gray-700 text-sm">Auto-fix & merge</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle size={16} className="text-green-600" />
+                    <span className="text-gray-700 text-sm">Priority support</span>
+                  </li>
+                </ul>
+                
+                <motion.button
+                  onClick={onGetStarted}
+                  className="w-full py-3 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors font-medium"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Start Pro Trial
+                </motion.button>
               </div>
-              <p className="text-gray-600 mb-2">For professional developers</p>
-              {billingCycle === 'annual' && (
-                <p className="text-sm text-green-600 mb-4 font-medium">Save $120/year</p>
-              )}
-              
-              <ul className="space-y-3 mb-8 text-left">
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700">Unlimited repositories</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700">Advanced AI reviews</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700">Auto-fix & merge</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700">Priority support</span>
-                </li>
-              </ul>
-              
-              <motion.button
-                onClick={onGetStarted}
-                className="w-full py-3 bg-indigo-500 text-white rounded-full hover:bg-indigo-600 transition-colors font-medium"
-                whileHover={{ 
-                  scale: 1.05, 
-                  boxShadow: "0 15px 20px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -5px rgba(0, 0, 0, 0.08)" 
-                }}
-                whileTap={{ scale: 0.95 }}
-                transition={{ duration: 0.1 }}
-              >
-                Start Pro Trial
-              </motion.button>
             </motion.div>
 
             {/* Team Plan */}
             <motion.div
-              className="p-8 border-2 border-gray-200 rounded-2xl bg-white hover:border-gray-300 transition-all"
+              className="p-6 border-2 border-gray-200 rounded-2xl bg-white hover:border-gray-300 transition-all"
               whileHover={{ 
                 scale: 1.02, 
                 y: -5, 
@@ -1080,49 +1082,48 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
             >
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Team</h3>
-              <div className="flex items-baseline gap-2 mb-4">
-                <div className="text-4xl font-bold text-gray-900">
-                  ${billingCycle === 'annual' ? '39' : '99'}
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Team</h3>
+              <p className="text-gray-600 text-sm mb-4">For development teams</p>
+
+              <div className="mb-6">
+                <div className="flex items-baseline justify-center gap-2 mb-1">
+                  <span className="text-3xl font-bold text-gray-900">
+                    ${billingCycle === 'annual' ? '20' : '25'}
+                  </span>
+                  {billingCycle === 'annual' && (
+                    <span className="text-lg line-through text-gray-400">$25</span>
+                  )}
                 </div>
+                <div className="text-sm text-gray-600">USD/user/month</div>
                 {billingCycle === 'annual' && (
-                  <div className="text-lg line-through text-gray-400">$99</div>
+                  <p className="text-sm text-green-600 mt-1 font-medium">Save $60/year</p>
                 )}
-                <span className="text-gray-600 whitespace-nowrap">per month</span>
               </div>
-              <p className="text-gray-600 mb-2">For development teams</p>
-              {billingCycle === 'annual' && (
-                <p className="text-sm text-green-600 mb-4 font-medium">Save $240/year</p>
-              )}
               
               <ul className="space-y-3 mb-8 text-left">
                 <li className="flex items-center gap-2">
                   <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700">Everything in Pro</span>
+                  <span className="text-gray-700 text-sm">Everything in Pro</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700">Team collaboration</span>
+                  <span className="text-gray-700 text-sm">Team collaboration</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700">Advanced analytics</span>
+                  <span className="text-gray-700 text-sm">Advanced analytics</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700">Dedicated support</span>
+                  <span className="text-gray-700 text-sm">Dedicated support</span>
                 </li>
               </ul>
               
               <motion.button
                 onClick={onGetStarted}
-                className="w-full py-3 border-2 border-gray-300 rounded-full hover:bg-gray-50 transition-colors font-medium text-gray-900"
-                whileHover={{ 
-                  scale: 1.05, 
-                  boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
-                }}
+                className="w-full py-3 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-gray-900"
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                transition={{ duration: 0.1 }}
               >
                 Upgrade Now
               </motion.button>
@@ -1141,7 +1142,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </section>
 
-      {/* COMPREHENSIVE FEATURE COMPARISON TABLE - BELOW PRICING */}
+      {/* COMPREHENSIVE FEATURE COMPARISON TABLE - REMOVED PRICES */}
       <section className="py-20 bg-gradient-to-br from-gray-50 to-blue-50/30">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
@@ -1153,24 +1154,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             </p>
           </div>
 
-          {/* Plan Headers */}
+          {/* Plan Headers - REMOVED PRICES */}
           <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-lg">
             <div className="grid grid-cols-4 gap-4 p-6 bg-gray-50 border-b border-gray-200">
               <div className="font-semibold text-gray-900">Features</div>
               <div className="text-center">
                 <div className="font-semibold text-gray-900">Free</div>
-                <div className="text-sm text-gray-600">$0/month</div>
               </div>
               <div className="text-center">
                 <div className="font-semibold text-gray-900 flex items-center justify-center gap-2">
                   Pro
                   <span className="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded-full whitespace-nowrap">Popular</span>
                 </div>
-                <div className="text-sm text-gray-600">$19/month</div>
               </div>
               <div className="text-center">
                 <div className="font-semibold text-gray-900">Team</div>
-                <div className="text-sm text-gray-600">$39/month</div>
               </div>
             </div>
 
@@ -1244,6 +1242,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
           </div>
         </div>
       </section>
+
+      {/* FEEDBACK SECTION - ADDED BACK */}
+      <FeedbackSection />
 
       {/* CTA Section */}
       <section className="py-20 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
