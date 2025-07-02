@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { MessageSquare, Star, ThumbsUp, Clock, User, ChevronRight, Award, TrendingUp, Users, Target } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MessageSquare, Star, ThumbsUp, Clock, User, ChevronRight, Award, TrendingUp, Users, Target, ChevronLeft } from 'lucide-react';
 import { useFeedback } from '../hooks/useFeedback';
 import FeedbackModal from './FeedbackModal';
 
@@ -10,11 +10,12 @@ interface FeedbackSectionProps {
 
 const FeedbackSection: React.FC<FeedbackSectionProps> = ({ showInDashboard = false }) => {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [showAllFeedbacks, setShowAllFeedbacks] = useState(false);
-  const { feedbacks, getFeedbackStats, getRecentFeedbacks, markHelpful } = useFeedback();
+  const [currentPage, setCurrentPage] = useState(1);
+  const { feedbacks, getFeedbackStats, getPaginatedFeedbacks, markHelpful } = useFeedback();
 
   const stats = getFeedbackStats();
-  const recentFeedbacks = getRecentFeedbacks(showInDashboard ? 3 : 10);
+  const feedbacksPerPage = showInDashboard ? 3 : 5;
+  const paginatedData = getPaginatedFeedbacks(currentPage, feedbacksPerPage);
 
   const getTimeAgo = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -43,6 +44,10 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({ showInDashboard = fal
       case 'rejected': return 'text-red-600 bg-red-50';
       default: return 'text-orange-600 bg-orange-50';
     }
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
   };
 
   if (showInDashboard) {
@@ -88,14 +93,14 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({ showInDashboard = fal
 
           {/* Recent Feedbacks */}
           <div className="space-y-3">
-            {recentFeedbacks.length === 0 ? (
+            {paginatedData.feedbacks.length === 0 ? (
               <div className="text-center py-6">
                 <MessageSquare size={32} className="text-gray-400 mx-auto mb-3" />
                 <p className="text-gray-500">No feedback yet</p>
                 <p className="text-sm text-gray-400">Be the first to share your thoughts!</p>
               </div>
             ) : (
-              recentFeedbacks.map((feedback) => (
+              paginatedData.feedbacks.map((feedback) => (
                 <motion.div
                   key={feedback.id}
                   className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
@@ -253,124 +258,160 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({ showInDashboard = fal
             </motion.div>
           </div>
 
-          {/* PROFESSIONAL FEEDBACK LIST */}
+          {/* PROFESSIONAL FEEDBACK LIST WITH PAGINATION */}
           <div className="space-y-8">
-            {recentFeedbacks.length === 0 ? (
+            {paginatedData.feedbacks.length === 0 ? (
               <div className="text-center py-16 bg-white rounded-2xl border border-gray-200">
                 <MessageSquare size={64} className="text-gray-400 mx-auto mb-6" />
                 <h3 className="text-2xl font-semibold text-gray-900 mb-4">No feedback yet</h3>
                 <p className="text-gray-500 text-lg">Be the first to share your experience with ReviewAI!</p>
               </div>
             ) : (
-              recentFeedbacks.map((feedback, index) => (
-                <motion.div
-                  key={feedback.id}
-                  className="bg-white border border-gray-200 rounded-2xl p-8 transition-all"
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: index * 0.1 }}
-                  whileHover={{ 
-                    scale: 1.01, 
-                    y: -5, 
-                    boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)" 
-                  }}
-                >
-                  <div className="flex items-start gap-6">
-                    {/* User Avatar */}
-                    <div className="flex-shrink-0">
-                      {feedback.userAvatar ? (
-                        <img
-                          src={feedback.userAvatar}
-                          alt={feedback.userName}
-                          className="w-16 h-16 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
-                          <User size={24} className="text-white" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Feedback Content */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-4 mb-3">
-                        <h4 className="text-xl font-semibold text-gray-900">{feedback.userName}</h4>
-                        <div className="flex items-center gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              size={20}
-                              className={i < feedback.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'}
-                            />
-                          ))}
-                        </div>
-                        <span className="text-lg">{getCategoryEmoji(feedback.category)}</span>
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(feedback.status)}`}>
-                          {feedback.status}
-                        </span>
-                      </div>
-
-                      <h5 className="text-lg font-medium text-gray-900 mb-3">{feedback.title}</h5>
-                      <p className="text-gray-700 mb-4 leading-relaxed text-lg">"{feedback.message}"</p>
-
-                      {/* Admin Response */}
-                      {feedback.response && (
-                        <div className="bg-blue-50 border-l-4 border-blue-400 p-6 mb-4 rounded-r-lg">
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                              <span className="text-white text-sm font-bold">R</span>
-                            </div>
-                            <span className="font-semibold text-blue-900">ReviewAI Team</span>
-                            <span className="text-sm text-blue-600">{getTimeAgo(feedback.response.timestamp)}</span>
+              <>
+                {paginatedData.feedbacks.map((feedback, index) => (
+                  <motion.div
+                    key={feedback.id}
+                    className="bg-white border border-gray-200 rounded-2xl p-8 transition-all"
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: index * 0.1 }}
+                    whileHover={{ 
+                      scale: 1.01, 
+                      y: -5, 
+                      boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)" 
+                    }}
+                  >
+                    <div className="flex items-start gap-6">
+                      {/* User Avatar */}
+                      <div className="flex-shrink-0">
+                        {feedback.userAvatar ? (
+                          <img
+                            src={feedback.userAvatar}
+                            alt={feedback.userName}
+                            className="w-16 h-16 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
+                            <User size={24} className="text-white" />
                           </div>
-                          <p className="text-blue-800 leading-relaxed">{feedback.response.message}</p>
-                        </div>
-                      )}
+                        )}
+                      </div>
 
-                      {/* Footer */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-6 text-sm text-gray-500">
-                          <span className="flex items-center gap-2">
-                            <Clock size={16} />
-                            {getTimeAgo(feedback.timestamp)}
+                      {/* Feedback Content */}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-4 mb-3">
+                          <h4 className="text-xl font-semibold text-gray-900">{feedback.userName}</h4>
+                          <div className="flex items-center gap-1">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                size={20}
+                                className={i < feedback.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-lg">{getCategoryEmoji(feedback.category)}</span>
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(feedback.status)}`}>
+                            {feedback.status}
                           </span>
-                          <motion.button
-                            onClick={() => markHelpful(feedback.id)}
-                            className="flex items-center gap-2 hover:text-blue-600 transition-colors"
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            transition={{ duration: 0.1 }}
-                          >
-                            <ThumbsUp size={16} />
-                            Helpful ({feedback.helpful})
-                          </motion.button>
+                        </div>
+
+                        <h5 className="text-lg font-medium text-gray-900 mb-3">{feedback.title}</h5>
+                        <p className="text-gray-700 mb-4 leading-relaxed text-lg">"{feedback.message}"</p>
+
+                        {/* Admin Response */}
+                        {feedback.response && (
+                          <div className="bg-blue-50 border-l-4 border-blue-400 p-6 mb-4 rounded-r-lg">
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                                <span className="text-white text-sm font-bold">R</span>
+                              </div>
+                              <span className="font-semibold text-blue-900">ReviewAI Team</span>
+                              <span className="text-sm text-blue-600">{getTimeAgo(feedback.response.timestamp)}</span>
+                            </div>
+                            <p className="text-blue-800 leading-relaxed">{feedback.response.message}</p>
+                          </div>
+                        )}
+
+                        {/* Footer */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-6 text-sm text-gray-500">
+                            <span className="flex items-center gap-2">
+                              <Clock size={16} />
+                              {getTimeAgo(feedback.timestamp)}
+                            </span>
+                            <motion.button
+                              onClick={() => markHelpful(feedback.id)}
+                              className="flex items-center gap-2 hover:text-blue-600 transition-colors"
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              transition={{ duration: 0.1 }}
+                            >
+                              <ThumbsUp size={16} />
+                              Helpful ({feedback.helpful})
+                            </motion.button>
+                          </div>
                         </div>
                       </div>
                     </div>
+                  </motion.div>
+                ))}
+
+                {/* PAGINATION */}
+                {paginatedData.totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-4 mt-12">
+                    <motion.button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      whileHover={{ scale: currentPage === 1 ? 1 : 1.05 }}
+                      whileTap={{ scale: currentPage === 1 ? 1 : 0.95 }}
+                      transition={{ duration: 0.1 }}
+                    >
+                      <ChevronLeft size={16} />
+                      Previous
+                    </motion.button>
+
+                    <div className="flex items-center gap-2">
+                      {Array.from({ length: paginatedData.totalPages }, (_, i) => i + 1).map((page) => (
+                        <motion.button
+                          key={page}
+                          onClick={() => handlePageChange(page)}
+                          className={`px-4 py-2 rounded-lg font-medium ${
+                            page === currentPage
+                              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+                              : 'text-gray-600 hover:bg-gray-100'
+                          }`}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          transition={{ duration: 0.1 }}
+                        >
+                          {page}
+                        </motion.button>
+                      ))}
+                    </div>
+
+                    <motion.button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === paginatedData.totalPages}
+                      className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      whileHover={{ scale: currentPage === paginatedData.totalPages ? 1 : 1.05 }}
+                      whileTap={{ scale: currentPage === paginatedData.totalPages ? 1 : 0.95 }}
+                      transition={{ duration: 0.1 }}
+                    >
+                      Next
+                      <ChevronRight size={16} />
+                    </motion.button>
                   </div>
-                </motion.div>
-              ))
+                )}
+
+                {/* Pagination Info */}
+                <div className="text-center text-sm text-gray-500 mt-4">
+                  Showing {((currentPage - 1) * feedbacksPerPage) + 1} to {Math.min(currentPage * feedbacksPerPage, paginatedData.totalFeedbacks)} of {paginatedData.totalFeedbacks} reviews
+                </div>
+              </>
             )}
           </div>
-
-          {/* Show More Button */}
-          {feedbacks.length > (showInDashboard ? 3 : 10) && (
-            <div className="text-center mt-12">
-              <motion.button
-                onClick={() => setShowAllFeedbacks(!showAllFeedbacks)}
-                className="inline-flex items-center gap-3 px-8 py-4 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors font-medium"
-                whileHover={{ 
-                  scale: 1.05, 
-                  boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
-                }}
-                whileTap={{ scale: 0.95 }}
-                transition={{ duration: 0.1 }}
-              >
-                {showAllFeedbacks ? 'Show Less' : 'Show More Feedback'}
-                <ChevronRight size={16} className={showAllFeedbacks ? 'rotate-90' : ''} />
-              </motion.button>
-            </div>
-          )}
         </div>
       </section>
 

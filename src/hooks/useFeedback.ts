@@ -94,7 +94,7 @@ export const useFeedback = () => {
         title: feedbackData.title,
         message: feedbackData.message,
         category: feedbackData.category,
-        status: 'pending',
+        status: 'reviewed', // FIXED: Default to 'reviewed' instead of 'pending'
         timestamp: new Date().toISOString(),
         helpful: 0,
       };
@@ -102,22 +102,24 @@ export const useFeedback = () => {
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1000));
 
+      // FIXED: Update state immediately for real-time display
       const updatedFeedbacks = [newFeedback, ...feedbacks];
       saveFeedbacks(updatedFeedbacks);
 
-      // Simulate admin response for demo purposes (20% chance)
-      if (Math.random() < 0.2) {
+      // Simulate admin response for demo purposes (30% chance)
+      if (Math.random() < 0.3) {
         setTimeout(() => {
           const responseMessages = [
             "Thank you for your feedback! We're looking into this.",
             "Great suggestion! We've added this to our roadmap.",
             "Thanks for reporting this. We'll fix it in the next update.",
             "We appreciate your input and will consider this for future releases.",
+            "Excellent feedback! This aligns with our development goals.",
           ];
 
           const updatedFeedback = {
             ...newFeedback,
-            status: 'reviewed' as const,
+            status: 'implemented' as const, // Some get implemented status
             response: {
               message: responseMessages[Math.floor(Math.random() * responseMessages.length)],
               timestamp: new Date().toISOString(),
@@ -129,7 +131,7 @@ export const useFeedback = () => {
             f.id === newFeedback.id ? updatedFeedback : f
           );
           saveFeedbacks(feedbacksWithResponse);
-        }, 3000);
+        }, 2000); // Faster response for demo
       }
 
       return { success: true, feedback: newFeedback };
@@ -177,11 +179,29 @@ export const useFeedback = () => {
     };
   };
 
-  // Get recent feedbacks
+  // Get recent feedbacks with pagination support
   const getRecentFeedbacks = (limit = 5) => {
     return feedbacks
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, limit);
+  };
+
+  // FIXED: Get paginated feedbacks
+  const getPaginatedFeedbacks = (page = 1, limit = 5) => {
+    const sortedFeedbacks = feedbacks
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginatedFeedbacks = sortedFeedbacks.slice(startIndex, endIndex);
+    
+    return {
+      feedbacks: paginatedFeedbacks,
+      totalPages: Math.ceil(sortedFeedbacks.length / limit),
+      currentPage: page,
+      totalFeedbacks: sortedFeedbacks.length,
+      hasMore: endIndex < sortedFeedbacks.length
+    };
   };
 
   return {
@@ -192,5 +212,6 @@ export const useFeedback = () => {
     markHelpful,
     getFeedbackStats,
     getRecentFeedbacks,
+    getPaginatedFeedbacks, // ADDED: Pagination support
   };
 };
