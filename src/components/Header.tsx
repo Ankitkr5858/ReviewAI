@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, Wand2, Crown, User, LogOut, Settings, ChevronDown } from 'lucide-react';
+import { Menu, Wand2, User, LogOut, Settings, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useGitHubIntegration } from '../hooks/useGitHubIntegration';
@@ -95,21 +95,6 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
           </div>
 
           <div className="flex items-center gap-4">
-            <motion.button
-              onClick={onSubscriptionClick}
-              className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-all font-medium shadow-xl cursor-pointer"
-              whileHover={{ 
-                scale: 1.05, 
-                y: -1, 
-                boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)" 
-              }}
-              whileTap={{ scale: 0.95 }}
-              transition={{ duration: 0.1 }}
-            >
-              <Crown size={16} />
-              <span className="font-medium">Upgrade</span>
-            </motion.button>
-            
             {/* User Menu */}
             <div className="relative">
               <motion.button

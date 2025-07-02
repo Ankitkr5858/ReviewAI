@@ -17,7 +17,10 @@ import {
   Play,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Search,
+  Settings,
+  GitMerge
 } from 'lucide-react';
 import FeedbackSection from './FeedbackSection';
 
@@ -41,19 +44,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       icon: Zap,
       title: 'Instant Auto-Fix',
       description: 'One-click fixes for common issues. Automatically apply best practices and coding standards',
-      color: 'from-green-500 to-emerald-600'
+      color: 'from-blue-500 to-purple-600'
     },
     {
       icon: Shield,
       title: 'Security-First Approach',
       description: 'Identify security flaws, XSS vulnerabilities, and potential exploits before deployment',
-      color: 'from-red-500 to-pink-600'
+      color: 'from-blue-500 to-purple-600'
     },
     {
       icon: Clock,
       title: 'Real-time GitHub Integration',
       description: 'Seamless integration with GitHub. Review pull requests and main branch automatically',
-      color: 'from-orange-500 to-yellow-600'
+      color: 'from-blue-500 to-purple-600'
     }
   ];
 
@@ -86,116 +89,105 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
     }
   ];
 
-  // Dashboard slides with PROPERLY CENTERED content
+  // Dashboard slides with PROPERLY CENTERED content and FIXED HEIGHT
   const dashboardSlides = [
     {
       title: 'Main Dashboard',
       content: (
-        <div className="w-full h-full flex items-center justify-center p-8">
-          <div className="w-full max-w-4xl bg-white rounded-xl shadow-lg overflow-hidden">
+        <div className="w-full h-full flex items-center justify-center p-4">
+          <div className="w-full max-w-5xl bg-white rounded-xl shadow-lg overflow-hidden" style={{ height: '320px' }}>
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-4">
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3">
               <div className="flex items-center justify-between text-white">
                 <div className="flex items-center gap-3">
-                  <Wand2 size={24} />
+                  <Wand2 size={20} />
                   <div>
-                    <h3 className="font-bold">ReviewAI Dashboard</h3>
-                    <p className="text-sm opacity-90">Automated Code Review</p>
+                    <h3 className="font-bold text-sm">ReviewAI Dashboard</h3>
+                    <p className="text-xs opacity-90">Automated Code Review</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="bg-white/20 px-3 py-1 rounded-full text-sm">Team</span>
-                  <div className="w-8 h-8 bg-white/20 rounded-full"></div>
+                  <span className="bg-white/20 px-2 py-1 rounded-full text-xs">Team</span>
+                  <div className="w-6 h-6 bg-white/20 rounded-full"></div>
                 </div>
               </div>
             </div>
 
             {/* Stats Grid */}
-            <div className="p-6">
-              <div className="grid grid-cols-4 gap-4 mb-6">
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-gray-900 mb-1">25</div>
-                  <div className="text-sm text-gray-600">Reviews Completed</div>
+            <div className="p-4 h-full overflow-hidden">
+              <div className="grid grid-cols-4 gap-3 mb-4">
+                <div className="text-center p-3 bg-gray-50 rounded-lg">
+                  <div className="text-xl font-bold text-gray-900 mb-1">25</div>
+                  <div className="text-xs text-gray-600">Reviews Completed</div>
                   <div className="text-xs text-blue-600 mt-1">+12%</div>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-gray-900 mb-1">114</div>
-                  <div className="text-sm text-gray-600">Active Repositories</div>
+                <div className="text-center p-3 bg-gray-50 rounded-lg">
+                  <div className="text-xl font-bold text-gray-900 mb-1">114</div>
+                  <div className="text-xs text-gray-600">Active Repositories</div>
                   <div className="text-xs text-blue-600 mt-1">+12%</div>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-gray-900 mb-1">11</div>
-                  <div className="text-sm text-gray-600">Issues Resolved</div>
+                <div className="text-center p-3 bg-gray-50 rounded-lg">
+                  <div className="text-xl font-bold text-gray-900 mb-1">11</div>
+                  <div className="text-xs text-gray-600">Issues Resolved</div>
                   <div className="text-xs text-blue-600 mt-1">+12%</div>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-gray-900 mb-1">22h</div>
-                  <div className="text-sm text-gray-600">Time Saved</div>
+                <div className="text-center p-3 bg-gray-50 rounded-lg">
+                  <div className="text-xl font-bold text-gray-900 mb-1">22h</div>
+                  <div className="text-xs text-gray-600">Time Saved</div>
                   <div className="text-xs text-blue-600 mt-1">+12%</div>
                 </div>
               </div>
 
               {/* Active Reviews and Recent Activity */}
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-3">Active Reviews</h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                        <span className="font-medium">Bitespeed</span>
+                  <h4 className="font-semibold text-gray-900 mb-2 text-sm">Active Reviews</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span className="font-medium text-sm">Bitespeed</span>
                       </div>
-                      <span className="text-sm text-green-600">completed</span>
+                      <span className="text-xs text-green-600">completed</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full" style={{ width: '100%' }}></div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div className="bg-gradient-to-r from-blue-600 to-purple-600 h-1.5 rounded-full" style={{ width: '100%' }}></div>
                     </div>
                     
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                        <span className="font-medium">vue-Task</span>
+                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span className="font-medium text-sm">vue-Task</span>
                       </div>
-                      <span className="text-sm text-blue-600">in-progress</span>
+                      <span className="text-xs text-blue-600">in-progress</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full" style={{ width: '65%' }}></div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                        <span className="font-medium">web3</span>
-                      </div>
-                      <span className="text-sm text-orange-600">review-required</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full" style={{ width: '25%' }}></div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div className="bg-gradient-to-r from-blue-600 to-purple-600 h-1.5 rounded-full" style={{ width: '65%' }}></div>
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-3">Recent Activity</h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-2">
-                      <CheckCircle size={16} className="text-green-600" />
+                  <h4 className="font-semibold text-gray-900 mb-2 text-sm">Recent Activity</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 p-1">
+                      <CheckCircle size={12} className="text-green-600" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium">Code review completed</p>
+                        <p className="text-xs font-medium">Code review completed</p>
                         <p className="text-xs text-gray-500">Bitespeed • 2h ago</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 p-2">
-                      <Zap size={16} className="text-blue-600" />
+                    <div className="flex items-center gap-2 p-1">
+                      <Zap size={12} className="text-blue-600" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium">AI fixed 5 issues</p>
+                        <p className="text-xs font-medium">AI fixed 5 issues</p>
                         <p className="text-xs text-gray-500">vue-Task • 4h ago</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 p-2">
-                      <GitBranch size={16} className="text-gray-600" />
+                    <div className="flex items-center gap-2 p-1">
+                      <GitBranch size={12} className="text-gray-600" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium">New repository added</p>
+                        <p className="text-xs font-medium">New repository added</p>
                         <p className="text-xs text-gray-500">web3 • 1d ago</p>
                       </div>
                     </div>
@@ -210,42 +202,42 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
     {
       title: 'Repository Management',
       content: (
-        <div className="w-full h-full flex items-center justify-center p-8">
-          <div className="w-full max-w-4xl bg-white rounded-xl shadow-lg overflow-hidden">
+        <div className="w-full h-full flex items-center justify-center p-4">
+          <div className="w-full max-w-5xl bg-white rounded-xl shadow-lg overflow-hidden" style={{ height: '320px' }}>
             {/* Header */}
-            <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-4">
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3">
               <div className="flex items-center justify-between text-white">
                 <div>
-                  <h3 className="font-bold text-lg">Repository Management</h3>
-                  <p className="text-sm opacity-90">Manage your connected repositories (114 total)</p>
+                  <h3 className="font-bold text-sm">Repository Management</h3>
+                  <p className="text-xs opacity-90">Manage your connected repositories (114 total)</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="bg-white/20 px-3 py-1 rounded-full text-sm">+ Sync Repositories</button>
+                  <button className="bg-white/20 px-2 py-1 rounded-full text-xs">+ Sync Repositories</button>
                 </div>
               </div>
             </div>
 
             {/* Repository Grid */}
-            <div className="p-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                      <GitBranch size={16} className="text-white" />
+            <div className="p-4 h-full overflow-hidden">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="border border-gray-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                      <GitBranch size={12} className="text-white" />
                     </div>
                     <div>
-                      <h4 className="font-semibold">ReviewAI</h4>
-                      <p className="text-sm text-gray-600">No description available</p>
+                      <h4 className="font-semibold text-sm">ReviewAI</h4>
+                      <p className="text-xs text-gray-600">No description available</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center gap-2 mb-2">
                     <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-full text-xs">Active</span>
                     <span className="text-xs text-gray-500">JavaScript</span>
                   </div>
-                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                  <div className="grid grid-cols-4 gap-1 text-center text-xs">
                     <div>
                       <div className="font-semibold">0</div>
-                      <div className="text-gray-500">Open Issues</div>
+                      <div className="text-gray-500">Open</div>
                     </div>
                     <div>
                       <div className="font-semibold text-green-600">0</div>
@@ -262,24 +254,24 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   </div>
                 </div>
 
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                      <GitBranch size={16} className="text-white" />
+                <div className="border border-gray-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                      <GitBranch size={12} className="text-white" />
                     </div>
                     <div>
-                      <h4 className="font-semibold">Bitespeed</h4>
-                      <p className="text-sm text-gray-600">No description available</p>
+                      <h4 className="font-semibold text-sm">Bitespeed</h4>
+                      <p className="text-xs text-gray-600">No description available</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center gap-2 mb-2">
                     <span className="px-2 py-1 bg-green-50 text-green-600 rounded-full text-xs">Completed</span>
                     <span className="text-xs text-gray-500">JavaScript</span>
                   </div>
-                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                  <div className="grid grid-cols-4 gap-1 text-center text-xs">
                     <div>
                       <div className="font-semibold">1</div>
-                      <div className="text-gray-500">Open Issues</div>
+                      <div className="text-gray-500">Open</div>
                     </div>
                     <div>
                       <div className="font-semibold text-green-600">11</div>
@@ -295,74 +287,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                     </div>
                   </div>
                 </div>
-
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                      <GitBranch size={16} className="text-white" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold">vue-Task</h4>
-                      <p className="text-sm text-gray-600">No description available</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="px-2 py-1 bg-orange-50 text-orange-600 rounded-full text-xs">Review Required</span>
-                    <span className="text-xs text-gray-500">Vue</span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                    <div>
-                      <div className="font-semibold">3</div>
-                      <div className="text-gray-500">Open Issues</div>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-green-600">0</div>
-                      <div className="text-gray-500">Resolved</div>
-                    </div>
-                    <div>
-                      <div className="font-semibold">0</div>
-                      <div className="text-gray-500">Stars</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500">Updated</div>
-                      <div className="font-semibold text-xs">14h ago</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                      <GitBranch size={16} className="text-white" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold">ankity-exercise</h4>
-                      <p className="text-sm text-gray-600">No description available</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="px-2 py-1 bg-orange-50 text-orange-600 rounded-full text-xs">Review Required</span>
-                    <span className="text-xs text-gray-500">JavaScript</span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                    <div>
-                      <div className="font-semibold">83</div>
-                      <div className="text-gray-500">Open Issues</div>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-green-600">0</div>
-                      <div className="text-gray-500">Resolved</div>
-                    </div>
-                    <div>
-                      <div className="font-semibold">0</div>
-                      <div className="text-gray-500">Stars</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500">Updated</div>
-                      <div className="font-semibold text-xs">15h ago</div>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -372,45 +296,45 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
     {
       title: 'AI Code Review',
       content: (
-        <div className="w-full h-full flex items-center justify-center p-8">
-          <div className="w-full max-w-4xl bg-white rounded-xl shadow-lg overflow-hidden">
+        <div className="w-full h-full flex items-center justify-center p-4">
+          <div className="w-full max-w-5xl bg-white rounded-xl shadow-lg overflow-hidden" style={{ height: '320px' }}>
             {/* Header */}
-            <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-4">
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3">
               <div className="flex items-center justify-between text-white">
                 <div>
-                  <h3 className="font-bold text-lg">AI Code Review</h3>
-                  <p className="text-sm opacity-90">Security Issue Found</p>
+                  <h3 className="font-bold text-sm">AI Code Review</h3>
+                  <p className="text-xs opacity-90">Security Issue Found</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="bg-white/20 px-3 py-1 rounded-full text-sm">High Priority</span>
+                  <span className="bg-white/20 px-2 py-1 rounded-full text-xs">High Priority</span>
                 </div>
               </div>
             </div>
 
             {/* Code Review Content */}
-            <div className="p-6">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-red-600 text-sm">⚠</span>
+            <div className="p-4 h-full overflow-hidden">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
+                <div className="flex items-start gap-2">
+                  <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-red-600 text-xs">⚠</span>
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-semibold text-red-900 mb-2">Security Issue Found</h4>
-                    <p className="text-red-800 text-sm mb-3">Potential XSS vulnerability detected in user input handling</p>
+                    <h4 className="font-semibold text-red-900 mb-1 text-sm">Security Issue Found</h4>
+                    <p className="text-red-800 text-xs mb-2">Potential XSS vulnerability detected in user input handling</p>
                     
                     {/* Code Diff */}
                     <div className="bg-white rounded border overflow-hidden">
-                      <div className="bg-red-100 px-3 py-2 border-b text-sm font-medium text-red-800">
+                      <div className="bg-red-100 px-2 py-1 border-b text-xs font-medium text-red-800">
                         Current Code (Vulnerable)
                       </div>
-                      <div className="p-3 font-mono text-sm">
+                      <div className="p-2 font-mono text-xs">
                         <div className="text-red-600">- innerHTML = userInput;</div>
                       </div>
                       
-                      <div className="bg-green-100 px-3 py-2 border-b text-sm font-medium text-green-800">
+                      <div className="bg-green-100 px-2 py-1 border-b text-xs font-medium text-green-800">
                         Suggested Fix
                       </div>
-                      <div className="p-3 font-mono text-sm">
+                      <div className="p-2 font-mono text-xs">
                         <div className="text-green-600">+ textContent = sanitize(userInput);</div>
                       </div>
                     </div>
@@ -418,27 +342,26 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 </div>
               </div>
 
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-yellow-600 text-sm">⚡</span>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
+                <div className="flex items-start gap-2">
+                  <div className="w-5 h-5 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-yellow-600 text-xs">⚡</span>
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-semibold text-yellow-900 mb-1">Performance Warning</h4>
-                    <p className="text-yellow-800 text-sm">Consider using async/await for better performance</p>
+                    <h4 className="font-semibold text-yellow-900 mb-1 text-sm">Performance Warning</h4>
+                    <p className="text-yellow-800 text-xs">Consider using async/await for better performance</p>
                   </div>
-                  <ChevronRight size={16} className="text-yellow-600 mt-1" />
                 </div>
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <CheckCircle size={14} className="text-blue-600" />
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <CheckCircle size={10} className="text-blue-600" />
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-semibold text-blue-900 mb-1">Code Quality Suggestion</h4>
-                    <p className="text-blue-800 text-sm">Consider extracting this function for better reusability</p>
+                    <h4 className="font-semibold text-blue-900 mb-1 text-sm">Code Quality Suggestion</h4>
+                    <p className="text-blue-800 text-xs">Consider extracting this function for better reusability</p>
                   </div>
                 </div>
               </div>
@@ -450,116 +373,52 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
     {
       title: 'Advanced Analytics',
       content: (
-        <div className="w-full h-full flex items-center justify-center p-8">
-          <div className="w-full max-w-4xl bg-white rounded-xl shadow-lg overflow-hidden">
+        <div className="w-full h-full flex items-center justify-center p-4">
+          <div className="w-full max-w-5xl bg-white rounded-xl shadow-lg overflow-hidden" style={{ height: '320px' }}>
             {/* Header */}
-            <div className="bg-gradient-to-r from-indigo-600 to-blue-600 p-4">
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3">
               <div className="flex items-center justify-between text-white">
                 <div>
-                  <h3 className="font-bold text-lg">Team Analytics</h3>
-                  <p className="text-sm opacity-90">Performance metrics and insights</p>
+                  <h3 className="font-bold text-sm">Team Analytics</h3>
+                  <p className="text-xs opacity-90">Performance metrics and insights</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="bg-white/20 px-3 py-1 rounded-full text-sm">Last 30 days</span>
+                  <span className="bg-white/20 px-2 py-1 rounded-full text-xs">Last 30 days</span>
                 </div>
               </div>
             </div>
 
             {/* Analytics Content */}
-            <div className="p-6">
-              <div className="grid grid-cols-3 gap-6 mb-6">
-                <div className="text-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200">
-                  <div className="text-3xl font-bold text-green-600 mb-2">98.5%</div>
-                  <div className="text-sm text-green-700 font-medium">Code Quality Score</div>
-                  <div className="text-xs text-green-600 mt-1">↗ +2.3% from last month</div>
+            <div className="p-4 h-full overflow-hidden">
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="text-center p-3 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                  <div className="text-2xl font-bold text-green-600 mb-1">98.5%</div>
+                  <div className="text-xs text-green-700 font-medium">Code Quality Score</div>
+                  <div className="text-xs text-green-600 mt-1">↗ +2.3%</div>
                 </div>
-                <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-                  <div className="text-3xl font-bold text-blue-600 mb-2">156</div>
-                  <div className="text-sm text-blue-700 font-medium">Issues Prevented</div>
-                  <div className="text-xs text-blue-600 mt-1">↗ +18% from last month</div>
+                <div className="text-center p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                  <div className="text-2xl font-bold text-blue-600 mb-1">156</div>
+                  <div className="text-xs text-blue-700 font-medium">Issues Prevented</div>
+                  <div className="text-xs text-blue-600 mt-1">↗ +18%</div>
                 </div>
-                <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200">
-                  <div className="text-3xl font-bold text-purple-600 mb-2">47h</div>
-                  <div className="text-sm text-purple-700 font-medium">Time Saved</div>
-                  <div className="text-xs text-purple-600 mt-1">↗ +12% from last month</div>
+                <div className="text-center p-3 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                  <div className="text-2xl font-bold text-purple-600 mb-1">47h</div>
+                  <div className="text-xs text-purple-700 font-medium">Time Saved</div>
+                  <div className="text-xs text-purple-600 mt-1">↗ +12%</div>
                 </div>
               </div>
 
               {/* Chart Placeholder */}
-              <div className="bg-gray-50 rounded-lg p-6 mb-6">
-                <h4 className="font-semibold text-gray-900 mb-4">Review Trends</h4>
-                <div className="h-32 bg-gradient-to-r from-blue-100 to-purple-100 rounded-lg flex items-end justify-between p-4">
-                  <div className="w-8 bg-gradient-to-t from-blue-500 to-blue-400 rounded-t" style={{ height: '60%' }}></div>
-                  <div className="w-8 bg-gradient-to-t from-blue-500 to-blue-400 rounded-t" style={{ height: '80%' }}></div>
-                  <div className="w-8 bg-gradient-to-t from-blue-500 to-blue-400 rounded-t" style={{ height: '70%' }}></div>
-                  <div className="w-8 bg-gradient-to-t from-blue-500 to-blue-400 rounded-t" style={{ height: '90%' }}></div>
-                  <div className="w-8 bg-gradient-to-t from-purple-500 to-purple-400 rounded-t" style={{ height: '100%' }}></div>
-                  <div className="w-8 bg-gradient-to-t from-purple-500 to-purple-400 rounded-t" style={{ height: '85%' }}></div>
-                  <div className="w-8 bg-gradient-to-t from-purple-500 to-purple-400 rounded-t" style={{ height: '95%' }}></div>
-                </div>
-              </div>
-
-              {/* Team Performance */}
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-3">Top Contributors</h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-2">
-                      <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">S</div>
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">Sarah Chen</p>
-                        <p className="text-xs text-gray-500">23 reviews completed</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-green-600">98.2%</p>
-                        <p className="text-xs text-gray-500">Quality</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-2">
-                      <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center text-white text-sm font-bold">M</div>
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">Marcus Rodriguez</p>
-                        <p className="text-xs text-gray-500">19 reviews completed</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-green-600">97.8%</p>
-                        <p className="text-xs text-gray-500">Quality</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-3">Issue Categories</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-700">Security</span>
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 bg-gray-200 rounded-full h-2">
-                          <div className="bg-red-500 h-2 rounded-full" style={{ width: '75%' }}></div>
-                        </div>
-                        <span className="text-sm font-medium">12</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-700">Performance</span>
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 bg-gray-200 rounded-full h-2">
-                          <div className="bg-yellow-500 h-2 rounded-full" style={{ width: '60%' }}></div>
-                        </div>
-                        <span className="text-sm font-medium">8</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-700">Code Quality</span>
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 bg-gray-200 rounded-full h-2">
-                          <div className="bg-blue-500 h-2 rounded-full" style={{ width: '45%' }}></div>
-                        </div>
-                        <span className="text-sm font-medium">6</span>
-                      </div>
-                    </div>
-                  </div>
+              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <h4 className="font-semibold text-gray-900 mb-3 text-sm">Review Trends</h4>
+                <div className="h-20 bg-gradient-to-r from-blue-100 to-purple-100 rounded-lg flex items-end justify-between p-3">
+                  <div className="w-6 bg-gradient-to-t from-blue-500 to-blue-400 rounded-t" style={{ height: '60%' }}></div>
+                  <div className="w-6 bg-gradient-to-t from-blue-500 to-blue-400 rounded-t" style={{ height: '80%' }}></div>
+                  <div className="w-6 bg-gradient-to-t from-blue-500 to-blue-400 rounded-t" style={{ height: '70%' }}></div>
+                  <div className="w-6 bg-gradient-to-t from-blue-500 to-blue-400 rounded-t" style={{ height: '90%' }}></div>
+                  <div className="w-6 bg-gradient-to-t from-purple-500 to-purple-400 rounded-t" style={{ height: '100%' }}></div>
+                  <div className="w-6 bg-gradient-to-t from-purple-500 to-purple-400 rounded-t" style={{ height: '85%' }}></div>
+                  <div className="w-6 bg-gradient-to-t from-purple-500 to-purple-400 rounded-t" style={{ height: '95%' }}></div>
                 </div>
               </div>
             </div>
@@ -586,70 +445,40 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
     setCurrentSlide((prev) => (prev - 1 + dashboardSlides.length) % dashboardSlides.length);
   };
 
-  // COMPREHENSIVE FEATURE COMPARISON TABLE - LIKE LOOM
-  const featureCategories = [
-    {
-      name: 'Code Review & Analysis',
-      features: [
-        { name: 'Repositories', free: 'Up to 3', pro: 'Unlimited', team: 'Unlimited' },
-        { name: 'Code quality checks', free: true, pro: true, team: true },
-        { name: 'Security vulnerability detection', free: 'Basic', pro: 'Advanced', team: 'Advanced' },
-        { name: 'Performance analysis', free: false, pro: true, team: true },
-        { name: 'Custom review rules', free: false, pro: true, team: true },
-        { name: 'AI-powered suggestions', free: 'Basic', pro: 'Advanced', team: 'Advanced' }
-      ]
+  // FIXED: 3-step animation with PROPER ICONS from your second image
+  const [currentStep, setCurrentStep] = useState(0);
+  const steps = [
+    { 
+      icon: Search, 
+      title: 'Review', 
+      description: 'AI analyzes your code for bugs, security issues, and quality problems',
+      color: 'from-blue-500 to-blue-600',
+      bgColor: 'bg-blue-500'
     },
-    {
-      name: 'Automation & Integration',
-      features: [
-        { name: 'GitHub integration', free: true, pro: true, team: true },
-        { name: 'Auto-fix & merge', free: false, pro: true, team: true },
-        { name: 'Daily main branch checks', free: true, pro: true, team: true },
-        { name: 'Pull request automation', free: false, pro: true, team: true },
-        { name: 'Slack/Teams integration', free: false, pro: true, team: true },
-        { name: 'Custom webhooks', free: false, pro: false, team: true }
-      ]
+    { 
+      icon: Settings, 
+      title: 'Fix', 
+      description: 'Automatically apply fixes or get detailed suggestions for improvements',
+      color: 'from-green-500 to-green-600',
+      bgColor: 'bg-green-500'
     },
-    {
-      name: 'Team & Collaboration',
-      features: [
-        { name: 'Team members', free: '1', pro: 'Up to 5', team: 'Unlimited' },
-        { name: 'Role-based permissions', free: false, pro: false, team: true },
-        { name: 'Team analytics', free: false, pro: 'Basic', team: 'Advanced' },
-        { name: 'Shared review templates', free: false, pro: false, team: true },
-        { name: 'SSO integration', free: false, pro: false, team: true }
-      ]
-    },
-    {
-      name: 'Support & Analytics',
-      features: [
-        { name: 'Support', free: 'Community', pro: 'Priority', team: 'Dedicated' },
-        { name: 'Analytics dashboard', free: false, pro: true, team: true },
-        { name: 'Custom reports', free: false, pro: false, team: true },
-        { name: 'API access', free: false, pro: 'Limited', team: 'Full' },
-        { name: 'SLA guarantee', free: false, pro: false, team: '99.9%' }
-      ]
+    { 
+      icon: GitMerge, 
+      title: 'Merge', 
+      description: 'Confidently merge your code knowing it meets quality standards',
+      color: 'from-purple-500 to-purple-600',
+      bgColor: 'bg-purple-500'
     }
   ];
 
-  const renderFeatureValue = (value: any) => {
-    if (typeof value === 'boolean') {
-      return (
-        <div className="flex justify-center">
-          {value ? (
-            <CheckCircle size={16} className="text-green-600" />
-          ) : (
-            <X size={16} className="text-gray-300" />
-          )}
-        </div>
-      );
-    }
-    return (
-      <div className="flex justify-center">
-        <span className="text-sm text-gray-700">{value}</span>
-      </div>
-    );
-  };
+  // Auto-cycle through steps
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentStep((prev) => (prev + 1) % steps.length);
+    }, 2000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <div className="min-h-screen bg-white font-sans">
@@ -673,7 +502,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
             <nav className="hidden md:flex items-center gap-8">
               <a href="#features" className="text-gray-600 hover:text-gray-900 transition-colors">Features</a>
-              <a href="#pricing" className="text-gray-600 hover:text-gray-900 transition-colors">Pricing</a>
               <a href="#testimonials" className="text-gray-600 hover:text-gray-900 transition-colors">Reviews</a>
               <motion.button
                 onClick={onGetStarted}
@@ -687,7 +515,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 transition={{ duration: 0.1 }}
               >
                 Get Started
-                <ArrowRight size={16} />
               </motion.button>
             </nav>
           </div>
@@ -728,7 +555,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
-              className="flex flex-col sm:flex-row gap-4 justify-center mb-12"
+              className="flex justify-center mb-12"
             >
               <motion.button
                 onClick={onGetStarted}
@@ -745,20 +572,75 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 Start Free Review
                 <ArrowRight size={20} />
               </motion.button>
-              
-              <motion.button
-                className="flex items-center justify-center gap-2 px-8 py-4 border border-gray-300 rounded-full hover:bg-gray-50 transition-all text-lg font-medium"
-                whileHover={{ 
-                  scale: 1.05, 
-                  y: -2, 
-                  boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
-                }}
-                whileTap={{ scale: 0.95 }}
-                transition={{ duration: 0.1 }}
-              >
-                <Play size={20} />
-                Watch Demo
-              </motion.button>
+            </motion.div>
+
+            {/* FIXED: 3-Step Animation Process with PROPER ICONS */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.3 }}
+              className="mb-12"
+            >
+              <div className="flex items-center justify-center gap-8 max-w-4xl mx-auto">
+                {steps.map((step, index) => (
+                  <React.Fragment key={index}>
+                    <motion.div
+                      className="flex flex-col items-center"
+                      animate={{
+                        scale: currentStep === index ? 1.1 : 1,
+                        opacity: currentStep === index ? 1 : 0.6
+                      }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <motion.div
+                        className={`w-16 h-16 rounded-2xl ${step.bgColor} flex items-center justify-center mb-3 shadow-lg`}
+                        animate={{
+                          boxShadow: currentStep === index 
+                            ? "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
+                            : "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)"
+                        }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <step.icon size={24} className="text-white" />
+                      </motion.div>
+                      <h3 className="font-bold text-gray-900 mb-2">{step.title}</h3>
+                      <p className="text-sm text-gray-600 text-center max-w-48">
+                        {step.description}
+                      </p>
+                    </motion.div>
+                    
+                    {index < steps.length - 1 && (
+                      <motion.div
+                        className="flex items-center"
+                        animate={{
+                          opacity: currentStep >= index ? 1 : 0.3
+                        }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <ArrowRight size={24} className="text-gray-400" />
+                      </motion.div>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+
+              {/* FIXED: Step indicators with proper dots */}
+              <div className="flex justify-center gap-2 mt-6">
+                {steps.map((_, index) => (
+                  <motion.div
+                    key={index}
+                    className={`w-2 h-2 rounded-full transition-all ${
+                      currentStep === index 
+                        ? 'bg-gradient-to-r from-blue-600 to-purple-600' 
+                        : 'bg-gray-300'
+                    }`}
+                    animate={{
+                      scale: currentStep === index ? 1.2 : 1
+                    }}
+                    transition={{ duration: 0.3 }}
+                  />
+                ))}
+              </div>
             </motion.div>
 
             {/* REAL Stats */}
@@ -779,7 +661,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </section>
 
-      {/* MODERN ANIMATED DASHBOARD SLIDESHOW - FIXED CENTERING */}
+      {/* MODERN ANIMATED DASHBOARD SLIDESHOW - FIXED SIZING */}
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
@@ -791,10 +673,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             </p>
           </div>
 
-          {/* SLIDESHOW CONTAINER - FIXED POSITIONING */}
+          {/* SLIDESHOW CONTAINER - FIXED HEIGHT */}
           <div className="relative max-w-6xl mx-auto">
-            <div className="relative h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border-2 border-gray-200 overflow-hidden">
-              {/* SLIDES - PROPERLY CENTERED */}
+            <div className="relative bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border-2 border-gray-200 overflow-hidden" style={{ height: '400px' }}>
+              {/* SLIDES - PROPERLY SIZED */}
               <div className="relative w-full h-full">
                 {dashboardSlides.map((slide, index) => (
                   <motion.div
@@ -812,7 +694,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 ))}
               </div>
 
-              {/* NAVIGATION ARROWS - PERFECTLY CENTERED */}
+              {/* NAVIGATION ARROWS */}
               <motion.button
                 onClick={prevSlide}
                 className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-white transition-all z-10"
@@ -915,278 +797,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   />
                 )}
               </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing Section - EXACT DASHBOARD PRICING */}
-      <section id="pricing" className="py-20 bg-white">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">
-            Simple, <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">transparent pricing</span>
-          </h2>
-          <p className="text-xl text-gray-600 mb-8">
-            Start free, scale as you grow
-          </p>
-
-          {/* Billing Toggle */}
-          <div className="flex items-center justify-center gap-4 mb-12">
-            <span className={`text-sm font-medium ${billingCycle === 'monthly' ? 'text-gray-900' : 'text-gray-500'}`}>
-              Monthly
-            </span>
-            <motion.button
-              onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'annual' : 'monthly')}
-              className="relative w-12 h-6 bg-gray-300 rounded-full transition-colors"
-              animate={{ backgroundColor: billingCycle === 'annual' ? '#6366f1' : '#d1d5db' }}
-            >
-              <motion.div
-                className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm"
-                animate={{ x: billingCycle === 'annual' ? 24 : 4 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              />
-            </motion.button>
-            <span className={`text-sm font-medium ${billingCycle === 'annual' ? 'text-gray-900' : 'text-gray-500'}`}>
-              Annual
-            </span>
-            {billingCycle === 'annual' && (
-              <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
-                Save 20%
-              </span>
-            )}
-          </div>
-
-          {/* EXACT DASHBOARD PRICING CARDS */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-            {/* Free Plan */}
-            <motion.div
-              className="p-6 border-2 border-gray-200 rounded-2xl bg-white hover:border-gray-300 transition-all"
-              whileHover={{ 
-                scale: 1.02, 
-                y: -5, 
-                boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)" 
-              }}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-            >
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Free</h3>
-              <p className="text-gray-600 text-sm mb-4">Perfect for personal projects</p>
-              
-              <div className="mb-6">
-                <div className="text-3xl font-bold text-gray-900 mb-1">$0</div>
-                <div className="text-sm text-gray-600">USD/user/month</div>
-              </div>
-              
-              <ul className="space-y-3 mb-8 text-left">
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700 text-sm">Up to 3 repositories</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700 text-sm">Basic AI reviews</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700 text-sm">Community support</span>
-                </li>
-              </ul>
-              
-              <motion.button
-                onClick={onGetStarted}
-                className="w-full py-3 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-gray-900"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                Get Started Free
-              </motion.button>
-            </motion.div>
-
-            {/* Pro Plan */}
-            <motion.div
-              className="relative p-6 border-2 border-indigo-500 rounded-2xl bg-white shadow-lg"
-              whileHover={{ 
-                scale: 1.02, 
-                y: -5, 
-                boxShadow: "0 25px 30px -5px rgba(0, 0, 0, 0.15), 0 15px 15px -5px rgba(0, 0, 0, 0.08)" 
-              }}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-            >
-              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                <div className="bg-indigo-500 text-white px-4 py-1 rounded-full text-sm font-medium whitespace-nowrap">
-                  Most Popular
-                </div>
-              </div>
-              
-              <div className="pt-4">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Pro</h3>
-                <p className="text-gray-600 text-sm mb-4">For professional developers</p>
-
-                <div className="mb-6">
-                  <div className="flex items-baseline justify-center gap-2 mb-1">
-                    <span className="text-3xl font-bold text-gray-900">
-                      ${billingCycle === 'annual' ? '12' : '15'}
-                    </span>
-                    {billingCycle === 'annual' && (
-                      <span className="text-lg line-through text-gray-400">$15</span>
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-600">USD/user/month</div>
-                  {billingCycle === 'annual' && (
-                    <p className="text-sm text-green-600 mt-1 font-medium">Save $36/year</p>
-                  )}
-                </div>
-                
-                <ul className="space-y-3 mb-8 text-left">
-                  <li className="flex items-center gap-2">
-                    <CheckCircle size={16} className="text-green-600" />
-                    <span className="text-gray-700 text-sm">Unlimited repositories</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle size={16} className="text-green-600" />
-                    <span className="text-gray-700 text-sm">Advanced AI reviews</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle size={16} className="text-green-600" />
-                    <span className="text-gray-700 text-sm">Auto-fix & merge</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle size={16} className="text-green-600" />
-                    <span className="text-gray-700 text-sm">Priority support</span>
-                  </li>
-                </ul>
-                
-                <motion.button
-                  onClick={onGetStarted}
-                  className="w-full py-3 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors font-medium"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  Start Pro Trial
-                </motion.button>
-              </div>
-            </motion.div>
-
-            {/* Team Plan */}
-            <motion.div
-              className="p-6 border-2 border-gray-200 rounded-2xl bg-white hover:border-gray-300 transition-all"
-              whileHover={{ 
-                scale: 1.02, 
-                y: -5, 
-                boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)" 
-              }}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-            >
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Team</h3>
-              <p className="text-gray-600 text-sm mb-4">For development teams</p>
-
-              <div className="mb-6">
-                <div className="flex items-baseline justify-center gap-2 mb-1">
-                  <span className="text-3xl font-bold text-gray-900">
-                    ${billingCycle === 'annual' ? '20' : '25'}
-                  </span>
-                  {billingCycle === 'annual' && (
-                    <span className="text-lg line-through text-gray-400">$25</span>
-                  )}
-                </div>
-                <div className="text-sm text-gray-600">USD/user/month</div>
-                {billingCycle === 'annual' && (
-                  <p className="text-sm text-green-600 mt-1 font-medium">Save $60/year</p>
-                )}
-              </div>
-              
-              <ul className="space-y-3 mb-8 text-left">
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700 text-sm">Everything in Pro</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700 text-sm">Team collaboration</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700 text-sm">Advanced analytics</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-600" />
-                  <span className="text-gray-700 text-sm">Dedicated support</span>
-                </li>
-              </ul>
-              
-              <motion.button
-                onClick={onGetStarted}
-                className="w-full py-3 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-gray-900"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                Upgrade Now
-              </motion.button>
-            </motion.div>
-          </div>
-
-          {/* Footer note */}
-          <div className="mt-8 text-center">
-            <p className="text-sm text-gray-600 mb-2">
-              All plans include 30-day money-back guarantee
-            </p>
-            <p className="text-xs text-gray-500">
-              Questions? Contact us at <span className="font-medium">support@reviewai.com</span>
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* COMPREHENSIVE FEATURE COMPARISON TABLE - REMOVED PRICES */}
-      <section className="py-20 bg-gradient-to-br from-gray-50 to-blue-50/30">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
-              Compare plans and <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">features</span>
-            </h2>
-            <p className="text-xl text-gray-600">
-              Choose the plan that fits your development workflow
-            </p>
-          </div>
-
-          {/* Plan Headers - REMOVED PRICES */}
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-lg">
-            <div className="grid grid-cols-4 gap-4 p-6 bg-gray-50 border-b border-gray-200">
-              <div className="font-semibold text-gray-900">Features</div>
-              <div className="text-center">
-                <div className="font-semibold text-gray-900">Free</div>
-              </div>
-              <div className="text-center">
-                <div className="font-semibold text-gray-900 flex items-center justify-center gap-2">
-                  Pro
-                  <span className="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded-full whitespace-nowrap">Popular</span>
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="font-semibold text-gray-900">Team</div>
-              </div>
-            </div>
-
-            {/* Feature Categories */}
-            {featureCategories.map((category, categoryIndex) => (
-              <div key={categoryIndex}>
-                <div className="px-6 py-4 bg-gray-100 border-b border-gray-200">
-                  <h3 className="font-semibold text-gray-900">{category.name}</h3>
-                </div>
-                {category.features.map((feature, featureIndex) => (
-                  <div key={featureIndex} className="grid grid-cols-4 gap-4 p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <div className="font-medium text-gray-700">{feature.name}</div>
-                    <div className="text-center">{renderFeatureValue(feature.free)}</div>
-                    <div className="text-center">{renderFeatureValue(feature.pro)}</div>
-                    <div className="text-center">{renderFeatureValue(feature.team)}</div>
-                  </div>
-                ))}
-              </div>
             ))}
           </div>
         </div>
@@ -1295,7 +905,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             </div>
             
             <div className="text-sm text-gray-400">
-              © 20 ReviewAI. All rights reserved.
+              © 2025 ReviewAI. All rights reserved.
             </div>
           </div>
         </div>

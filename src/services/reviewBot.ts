@@ -15,6 +15,22 @@ export interface ReviewResult {
   autoMerged?: boolean;
   issues?: CodeIssue[];
   issueNumber?: number;
+  isOwnPR?: boolean;
+  prDetails?: {
+    title: string;
+    author: string;
+    branch: string;
+    filesChanged: number;
+  };
+  fileChanges?: Array<{
+    filename: string;
+    status: string;
+    additions: number;
+    deletions: number;
+    changes: number;
+    patch?: string;
+    changedLines: number[];
+  }>;
 }
 
 export class ReviewBot {
@@ -36,31 +52,69 @@ export class ReviewBot {
     try {
       console.log(`Starting review for PR #${pullNumber} in ${owner}/${repo}`);
       
-      // Get PR files
+      // Get current user to check if this is own PR
+      const currentUser = await this.getCurrentUser();
+      
+      // Get PR details first
+      const prDetails = await this.github.request(`/repos/${owner}/${repo}/pulls/${pullNumber}`);
+      const isOwnPR = prDetails.user.login === currentUser.login;
+      
+      console.log(`PR Author: ${prDetails.user.login}, Current User: ${currentUser.login}, Is Own PR: ${isOwnPR}`);
+      
+      // Get PR files with changes
       const files = await this.github.getPullRequestFiles(owner, repo, pullNumber);
       const allIssues: CodeIssue[] = [];
       const reviewComments: string[] = [];
+      const fileChanges: any[] = [];
 
-      // Analyze each file
+      // CRITICAL: Only analyze the CHANGED LINES in PR files, not entire files
       for (const file of files) {
         if (file.status === 'removed') continue;
         
-        const content = await this.github.getFileContent(owner, repo, file.filename);
+        console.log(`Analyzing changes in ${file.filename}...`);
+        
+        // Get the patch (diff) to see what lines were changed
+        const changedLines = this.extractChangedLines(file.patch || '');
+        
+        // Store file change details for display
+        fileChanges.push({
+          filename: file.filename,
+          status: file.status,
+          additions: file.additions,
+          deletions: file.deletions,
+          changes: file.changes,
+          patch: file.patch,
+          changedLines: changedLines
+        });
+        
+        if (changedLines.length === 0) {
+          console.log(`No changed lines found in ${file.filename}, skipping analysis`);
+          continue;
+        }
+        
+        // Get file content
+        const content = await this.github.getFileContent(owner, repo, file.filename, prDetails.head.sha);
         if (!content) continue;
 
         const language = this.getLanguageFromFilename(file.filename);
-        const analysis = await this.analyzer.analyzeCode(content, file.filename, language);
         
-        allIssues.push(...analysis.issues);
+        // CRITICAL: Only analyze the changed lines, not the entire file
+        const analysis = await this.analyzer.analyzeChangedLines(content, file.filename, language, changedLines);
         
-        if (analysis.issues.length > 0) {
+        // CRITICAL: Filter out info-level issues - only keep critical and warnings
+        const filteredIssues = analysis.issues.filter(issue => 
+          issue.severity === 'high' || issue.severity === 'medium'
+        );
+        
+        allIssues.push(...filteredIssues);
+        
+        if (filteredIssues.length > 0) {
           reviewComments.push(`## 📁 ${file.filename}`);
           reviewComments.push('');
           
-          // Group issues by severity
-          const criticalIssues = analysis.issues.filter(i => i.severity === 'high');
-          const warningIssues = analysis.issues.filter(i => i.severity === 'medium');
-          const infoIssues = analysis.issues.filter(i => i.severity === 'low');
+          // Group issues by severity - only critical and warnings
+          const criticalIssues = filteredIssues.filter(i => i.severity === 'high');
+          const warningIssues = filteredIssues.filter(i => i.severity === 'medium');
           
           if (criticalIssues.length > 0) {
             reviewComments.push('### 🔴 Critical Issues');
@@ -79,8 +133,9 @@ export class ReviewBot {
             reviewComments.push('');
           }
           
+          // Note: Warnings are collected but can be ignored as per requirement
           if (warningIssues.length > 0) {
-            reviewComments.push('### 🟡 Warnings');
+            reviewComments.push('### 🟡 Warnings (Can be ignored)');
             warningIssues.forEach(issue => {
               reviewComments.push(`- **Line ${issue.line}**: ${issue.message}`);
               if (issue.suggestion) {
@@ -89,18 +144,30 @@ export class ReviewBot {
             });
             reviewComments.push('');
           }
-          
-          if (infoIssues.length > 0) {
-            reviewComments.push('### 🔵 Info');
-            infoIssues.forEach(issue => {
-              reviewComments.push(`- **Line ${issue.line}**: ${issue.message}`);
-            });
-            reviewComments.push('');
-          }
         }
       }
 
-      // Create review
+      // For own PRs, we can't create a GitHub review, but we can still analyze and return results
+      if (isOwnPR) {
+        console.log('This is own PR - returning analysis results without creating GitHub review');
+        
+        return {
+          success: true,
+          issuesFound: allIssues.length,
+          criticalIssues: allIssues.filter(i => i.severity === 'high').length,
+          issues: allIssues,
+          isOwnPR: true,
+          prDetails: {
+            title: prDetails.title,
+            author: prDetails.user.login,
+            branch: `${prDetails.head.ref} → ${prDetails.base.ref}`,
+            filesChanged: files.length
+          },
+          fileChanges: fileChanges
+        };
+      }
+
+      // For other PRs, create the review as usual
       const reviewBody = this.generateReviewBody(allIssues, reviewComments);
       const reviewEvent = this.determineReviewEvent(allIssues);
       
@@ -126,11 +193,114 @@ export class ReviewBot {
         criticalIssues: allIssues.filter(i => i.severity === 'high').length,
         autoMerged,
         issues: allIssues,
+        isOwnPR: false,
+        prDetails: {
+          title: prDetails.title,
+          author: prDetails.user.login,
+          branch: `${prDetails.head.ref} → ${prDetails.base.ref}`,
+          filesChanged: files.length
+        },
+        fileChanges: fileChanges
       };
     } catch (error) {
       console.error('Review failed:', error);
+      
+      // Check if it's the "own PR" error and handle gracefully
+      if (error instanceof Error && error.message.includes('Can not request changes on your own pull request')) {
+        // Still try to analyze the PR without creating a review
+        try {
+          const prDetails = await this.github.request(`/repos/${owner}/${repo}/pulls/${pullNumber}`);
+          const files = await this.github.getPullRequestFiles(owner, repo, pullNumber);
+          const allIssues: CodeIssue[] = [];
+          const fileChanges: any[] = [];
+
+          // Analyze files without creating review - ONLY CHANGED LINES
+          for (const file of files) {
+            if (file.status === 'removed') continue;
+            
+            const changedLines = this.extractChangedLines(file.patch || '');
+            
+            // Store file change details
+            fileChanges.push({
+              filename: file.filename,
+              status: file.status,
+              additions: file.additions,
+              deletions: file.deletions,
+              changes: file.changes,
+              patch: file.patch,
+              changedLines: changedLines
+            });
+            
+            if (changedLines.length === 0) continue;
+            
+            const content = await this.github.getFileContent(owner, repo, file.filename, prDetails.head.sha);
+            if (!content) continue;
+
+            const language = this.getLanguageFromFilename(file.filename);
+            const analysis = await this.analyzer.analyzeChangedLines(content, file.filename, language, changedLines);
+            
+            // Filter out info-level issues
+            const filteredIssues = analysis.issues.filter(issue => 
+              issue.severity === 'high' || issue.severity === 'medium'
+            );
+            
+            allIssues.push(...filteredIssues);
+          }
+
+          return {
+            success: true,
+            issuesFound: allIssues.length,
+            criticalIssues: allIssues.filter(i => i.severity === 'high').length,
+            issues: allIssues,
+            isOwnPR: true,
+            prDetails: {
+              title: prDetails.title,
+              author: prDetails.user.login,
+              branch: `${prDetails.head.ref} → ${prDetails.base.ref}`,
+              filesChanged: files.length
+            },
+            fileChanges: fileChanges
+          };
+        } catch (analysisError) {
+          console.error('Analysis failed:', analysisError);
+          throw error;
+        }
+      }
+      
       throw error;
     }
+  }
+
+  // NEW: Extract changed line numbers from git patch
+  private extractChangedLines(patch: string): number[] {
+    const changedLines: number[] = [];
+    const lines = patch.split('\n');
+    let currentLine = 0;
+    
+    for (const line of lines) {
+      // Look for hunk headers like @@ -1,4 +1,6 @@
+      const hunkMatch = line.match(/^@@ -\d+,?\d* \+(\d+),?\d* @@/);
+      if (hunkMatch) {
+        currentLine = parseInt(hunkMatch[1]) - 1; // Start from line before
+        continue;
+      }
+      
+      // Track line numbers for added/modified lines
+      if (line.startsWith('+') && !line.startsWith('+++')) {
+        currentLine++;
+        changedLines.push(currentLine);
+      } else if (line.startsWith(' ')) {
+        currentLine++;
+      }
+      // Skip removed lines (-)
+    }
+    
+    console.log(`Extracted ${changedLines.length} changed lines: ${changedLines.slice(0, 10).join(', ')}${changedLines.length > 10 ? '...' : ''}`);
+    return changedLines;
+  }
+
+  private async getCurrentUser() {
+    return this.github.request('/user');
   }
 
   async reviewMainBranch(owner: string, repo: string): Promise<ReviewResult> {
@@ -178,10 +348,17 @@ export class ReviewBot {
           // Skip non-code files for detailed analysis
           if (!this.isCodeFile(filename)) continue;
           
+          // For main branch review, analyze entire file but filter out info issues
           const analysis = await this.analyzer.analyzeCode(content, filename, language);
-          allIssues.push(...analysis.issues);
           
-          console.log(`Analyzed ${filename}: found ${analysis.issues.length} issues`);
+          // Filter out info-level issues for main branch too
+          const filteredIssues = analysis.issues.filter(issue => 
+            issue.severity === 'high' || issue.severity === 'medium'
+          );
+          
+          allIssues.push(...filteredIssues);
+          
+          console.log(`Analyzed ${filename}: found ${filteredIssues.length} critical/warning issues`);
         } catch (error) {
           // File might not exist, continue
           continue;
@@ -237,6 +414,7 @@ export class ReviewBot {
       const fixedFiles: string[] = [];
       const fixedIssues: CodeIssue[] = [];
       const commitMessages: string[] = [];
+      const fixDetails: any[] = [];
 
       console.log(`Processing ${Object.keys(issuesByFile).length} files with issues`);
 
@@ -268,14 +446,47 @@ export class ReviewBot {
 
           console.log(`Content changed for ${filename}, applying fixes...`);
 
-          // Create detailed commit message for this file
+          // Create detailed commit message for this file with EDUCATIONAL EXPLANATIONS
           const fixableIssues = fileIssues.filter(i => i.fixable);
-          const commitMessage = `🤖 ReviewAI: Fix ${fixableIssues.length} issues in ${filename}
+          
+          // Generate detailed explanations for each fix
+          const detailedExplanations = fixableIssues.map(issue => {
+            const explanation = this.getDetailedFixExplanation(issue);
+            
+            // Store fix details for notification
+            fixDetails.push({
+              file: filename,
+              line: issue.line,
+              issue: issue.message,
+              fix: explanation.whatWasFixed,
+              reason: explanation.whyItMatters
+            });
 
-Fixed issues:
-${fixableIssues.map(i => `- ${i.message} (line ${i.line})`).join('\n')}
+            return `
+📍 **Line ${issue.line}**: ${issue.message}
+   🔧 **What was fixed**: ${explanation.whatWasFixed}
+   💡 **Why this matters**: ${explanation.whyItMatters}
+   🎯 **Impact**: ${explanation.impact}
+   📚 **Learn more**: ${explanation.learnMore}`;
+          }).join('\n\n');
 
-Auto-fixed by ReviewAI`;
+          const commitMessage = `🤖 ReviewAI: Auto-fix ${fixableIssues.length} issues in ${filename}
+
+## 🔍 Issues Fixed:
+${detailedExplanations}
+
+## 📊 Summary:
+- Fixed ${fixableIssues.length} code quality issues
+- Improved code maintainability and security
+- Applied industry best practices
+- Enhanced code readability
+
+## 🎓 For Junior Developers:
+These fixes help you understand common coding patterns and best practices.
+Each fix teaches you something that experienced developers learned through years of debugging!
+
+---
+🤖 Auto-fixed by ReviewAI | Learn more: https://github.com/reviewai`;
 
           // Update the file on GitHub
           const updateResult = await this.github.updateFileContent(
@@ -316,6 +527,7 @@ Auto-fixed by ReviewAI`;
           : 'No fixable issues found',
         fixedFiles,
         fixedIssues: fixedIssues.length,
+        fixDetails, // Include detailed fix information
         commitMessage: fixedFiles.length > 0 
           ? `🤖 ReviewAI: Auto-fixed ${fixedIssues.length} issues across ${fixedFiles.length} files`
           : 'No changes made',
@@ -330,6 +542,80 @@ Auto-fixed by ReviewAI`;
       console.error('AI fix failed:', error);
       throw new Error(`AI fix failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  // NEW: Get detailed educational explanation for each fix
+  private getDetailedFixExplanation(issue: CodeIssue) {
+    const rule = issue.rule?.toLowerCase() || '';
+    const message = issue.message.toLowerCase();
+
+    // Missing semicolon
+    if (rule.includes('semi') || message.includes('semicolon')) {
+      return {
+        whatWasFixed: "Added semicolon (;) at the end of the statement",
+        whyItMatters: "JavaScript's Automatic Semicolon Insertion (ASI) can cause unexpected behavior when code is minified or certain patterns are used. Explicit semicolons prevent bugs.",
+        impact: "Prevents runtime errors and makes code more predictable",
+        learnMore: "ASI can combine two statements into one, breaking your logic"
+      };
+    }
+
+    // Console.log statements
+    if (rule.includes('console') || message.includes('console.log')) {
+      return {
+        whatWasFixed: "Removed or commented out console.log statement",
+        whyItMatters: "Console logs in production can expose sensitive data, clutter user's browser console, and impact performance. They're debugging tools, not production features.",
+        impact: "Improves security, performance, and user experience",
+        learnMore: "Use proper logging libraries for production applications"
+      };
+    }
+
+    // Strict equality
+    if (rule.includes('eqeqeq') || message.includes('strict equality') || message.includes('===')) {
+      return {
+        whatWasFixed: "Changed loose equality (==) to strict equality (===)",
+        whyItMatters: "Loose equality performs type coercion, which can lead to unexpected results like '0' == 0 being true. Strict equality compares both value and type.",
+        impact: "Prevents type coercion bugs and makes comparisons more predictable",
+        learnMore: "Type coercion can cause subtle bugs that are hard to debug"
+      };
+    }
+
+    // Error handling
+    if (rule.includes('error') || message.includes('error handling') || message.includes('try-catch')) {
+      return {
+        whatWasFixed: "Added try-catch block around async operation",
+        whyItMatters: "Unhandled async errors can crash your application. Network requests, file operations, and API calls can fail for many reasons (network issues, server errors, etc.).",
+        impact: "Prevents app crashes and provides better user experience",
+        learnMore: "Always handle errors in async operations to build robust applications"
+      };
+    }
+
+    // Unused variables
+    if (rule.includes('unused') || message.includes('unused')) {
+      return {
+        whatWasFixed: "Prefixed variable name with underscore to indicate intentional non-use",
+        whyItMatters: "Unused variables can indicate dead code, typos, or incomplete features. The underscore prefix is a convention that tells linters and developers this is intentional.",
+        impact: "Cleaner code without warnings and better team communication",
+        learnMore: "Clean code principles suggest removing unused code or clearly marking it as intentional"
+      };
+    }
+
+    // Security issues (innerHTML)
+    if (rule.includes('innerHTML') || message.includes('xss')) {
+      return {
+        whatWasFixed: "Changed innerHTML to textContent for safer text insertion",
+        whyItMatters: "innerHTML can execute malicious scripts if user input contains HTML/JavaScript, leading to XSS attacks. textContent safely sets text without interpreting HTML.",
+        impact: "Prevents XSS attacks and protects user data",
+        learnMore: "Always sanitize user input and use safe DOM manipulation methods"
+      };
+    }
+
+    // Default explanation
+    return {
+      whatWasFixed: `Applied fix according to ${issue.rule || 'coding standards'}`,
+      whyItMatters: "This change follows industry best practices and improves code quality",
+      impact: "Better maintainability and fewer potential bugs",
+      learnMore: "Following coding standards makes code more readable and maintainable"
+    };
   }
 
   private async autoCloseRelatedIssues(owner: string, repo: string, fixedIssues: CodeIssue[]) {
@@ -354,12 +640,20 @@ Auto-fixed by ReviewAI`;
         if (isReviewAIIssue) {
           console.log(`Found ReviewAI issue to close: #${issue.number} - ${issue.title}`);
           
-          // Create a detailed resolution comment
+          // Create a detailed resolution comment with educational content
           const closeComment = `🤖 **ReviewAI Auto-Resolution**
 
-This issue has been automatically resolved! The following fixes were applied:
+This issue has been automatically resolved! Here's what was fixed and why it matters:
 
-${fixedIssues.map(issue => `- ✅ **Fixed**: ${issue.message} in \`${issue.file}:${issue.line}\``).join('\n')}
+${fixedIssues.map(issue => {
+  const explanation = this.getDetailedFixExplanation(issue);
+  return `## 📍 ${issue.file}:${issue.line}
+**Issue**: ${issue.message}
+**Fix Applied**: ${explanation.whatWasFixed}
+**Why This Matters**: ${explanation.whyItMatters}
+**Impact**: ${explanation.impact}
+**Learning Tip**: ${explanation.learnMore}`;
+}).join('\n\n')}
 
 ## 📊 Summary
 - **${fixedIssues.length}** issues automatically fixed
@@ -367,8 +661,15 @@ ${fixedIssues.map(issue => `- ✅ **Fixed**: ${issue.message} in \`${issue.file}
 - Code quality improvements applied
 - Best practices enforced
 
+## 🎓 Educational Notes
+Each fix above teaches you something important about writing better code. Understanding these patterns will help you:
+- Write more secure code
+- Avoid common pitfalls
+- Follow industry standards
+- Build more maintainable applications
+
 ## 🔗 Changes
-The fixes have been committed to the repository. You can review the changes in the commit history.
+The fixes have been committed with detailed explanations. Check the commit messages to learn more about each fix!
 
 ---
 *🔧 Automatically resolved by ReviewAI • [View commits](https://github.com/${owner}/${repo}/commits)*`;
@@ -401,21 +702,19 @@ The fixes have been committed to the repository. You can review the changes in t
   private generateReviewBody(issues: CodeIssue[], comments: string[]): string {
     const criticalCount = issues.filter(i => i.severity === 'high').length;
     const warningCount = issues.filter(i => i.severity === 'medium').length;
-    const infoCount = issues.filter(i => i.severity === 'low').length;
 
     let body = '# 🤖 ReviewAI Analysis\n\n';
     
     if (issues.length === 0) {
-      body += '✅ **Excellent work!** No issues found in this pull request.\n\n';
-      body += 'The code looks clean and follows best practices. Ready to merge! 🚀';
+      body += '✅ **Excellent work!** No critical issues found in the changes.\n\n';
+      body += 'The code changes look clean and follow best practices. Ready to merge! 🚀';
     } else {
       body += `## 📊 Summary\n\n`;
-      body += `Found **${issues.length} issues** that need attention:\n\n`;
+      body += `Found **${issues.length} issues** in the changed code:\n\n`;
       body += `| Severity | Count |\n`;
       body += `|----------|-------|\n`;
       body += `| 🔴 Critical | ${criticalCount} |\n`;
-      body += `| 🟡 Warning | ${warningCount} |\n`;
-      body += `| 🔵 Info | ${infoCount} |\n\n`;
+      body += `| 🟡 Warning | ${warningCount} |\n\n`;
       
       if (criticalCount > 0) {
         body += '⚠️ **Critical issues must be addressed before merging.**\n\n';
@@ -441,14 +740,12 @@ The fixes have been committed to the repository. You can review the changes in t
     // Summary table
     const criticalCount = issues.filter(i => i.severity === 'high').length;
     const warningCount = issues.filter(i => i.severity === 'medium').length;
-    const infoCount = issues.filter(i => i.severity === 'low').length;
 
     body += `## 📊 Summary\n\n`;
     body += `| Severity | Count |\n`;
     body += `|----------|-------|\n`;
     body += `| 🔴 Critical | ${criticalCount} |\n`;
-    body += `| 🟡 Warning | ${warningCount} |\n`;
-    body += `| 🔵 Info | ${infoCount} |\n\n`;
+    body += `| 🟡 Warning | ${warningCount} |\n\n`;
 
     // Issues by file
     const groupedIssues = this.groupIssuesByFile(issues);
@@ -458,7 +755,7 @@ The fixes have been committed to the repository. You can review the changes in t
     Object.entries(groupedIssues).forEach(([filename, fileIssues]) => {
       body += `### ${filename}\n\n`;
       fileIssues.forEach(issue => {
-        const emoji = issue.severity === 'high' ? '🔴' : issue.severity === 'medium' ? '🟡' : '🔵';
+        const emoji = issue.severity === 'high' ? '🔴' : '🟡';
         body += `${emoji} **Line ${issue.line}**: ${issue.message}\n`;
         if (issue.suggestion) {
           body += `   💡 **Fix**: ${issue.suggestion}\n`;
