@@ -414,6 +414,7 @@ export class ReviewBot {
       const fixedFiles: string[] = [];
       const fixedIssues: CodeIssue[] = [];
       const commitMessages: string[] = [];
+      const fixDetails: any[] = [];
 
       console.log(`Processing ${Object.keys(issuesByFile).length} files with issues`);
 
@@ -445,14 +446,47 @@ export class ReviewBot {
 
           console.log(`Content changed for ${filename}, applying fixes...`);
 
-          // Create detailed commit message for this file
+          // Create detailed commit message for this file with EDUCATIONAL EXPLANATIONS
           const fixableIssues = fileIssues.filter(i => i.fixable);
-          const commitMessage = `🤖 ReviewAI: Fix ${fixableIssues.length} issues in ${filename}
+          
+          // Generate detailed explanations for each fix
+          const detailedExplanations = fixableIssues.map(issue => {
+            const explanation = this.getDetailedFixExplanation(issue);
+            
+            // Store fix details for notification
+            fixDetails.push({
+              file: filename,
+              line: issue.line,
+              issue: issue.message,
+              fix: explanation.whatWasFixed,
+              reason: explanation.whyItMatters
+            });
 
-Fixed issues:
-${fixableIssues.map(i => `- ${i.message} (line ${i.line})`).join('\n')}
+            return `
+📍 **Line ${issue.line}**: ${issue.message}
+   🔧 **What was fixed**: ${explanation.whatWasFixed}
+   💡 **Why this matters**: ${explanation.whyItMatters}
+   🎯 **Impact**: ${explanation.impact}
+   📚 **Learn more**: ${explanation.learnMore}`;
+          }).join('\n\n');
 
-Auto-fixed by ReviewAI`;
+          const commitMessage = `🤖 ReviewAI: Auto-fix ${fixableIssues.length} issues in ${filename}
+
+## 🔍 Issues Fixed:
+${detailedExplanations}
+
+## 📊 Summary:
+- Fixed ${fixableIssues.length} code quality issues
+- Improved code maintainability and security
+- Applied industry best practices
+- Enhanced code readability
+
+## 🎓 For Junior Developers:
+These fixes help you understand common coding patterns and best practices.
+Each fix teaches you something that experienced developers learned through years of debugging!
+
+---
+🤖 Auto-fixed by ReviewAI | Learn more: https://github.com/reviewai`;
 
           // Update the file on GitHub
           const updateResult = await this.github.updateFileContent(
@@ -493,6 +527,7 @@ Auto-fixed by ReviewAI`;
           : 'No fixable issues found',
         fixedFiles,
         fixedIssues: fixedIssues.length,
+        fixDetails, // Include detailed fix information
         commitMessage: fixedFiles.length > 0 
           ? `🤖 ReviewAI: Auto-fixed ${fixedIssues.length} issues across ${fixedFiles.length} files`
           : 'No changes made',
@@ -507,6 +542,80 @@ Auto-fixed by ReviewAI`;
       console.error('AI fix failed:', error);
       throw new Error(`AI fix failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  // NEW: Get detailed educational explanation for each fix
+  private getDetailedFixExplanation(issue: CodeIssue) {
+    const rule = issue.rule?.toLowerCase() || '';
+    const message = issue.message.toLowerCase();
+
+    // Missing semicolon
+    if (rule.includes('semi') || message.includes('semicolon')) {
+      return {
+        whatWasFixed: "Added semicolon (;) at the end of the statement",
+        whyItMatters: "JavaScript's Automatic Semicolon Insertion (ASI) can cause unexpected behavior when code is minified or certain patterns are used. Explicit semicolons prevent bugs.",
+        impact: "Prevents runtime errors and makes code more predictable",
+        learnMore: "ASI can combine two statements into one, breaking your logic"
+      };
+    }
+
+    // Console.log statements
+    if (rule.includes('console') || message.includes('console.log')) {
+      return {
+        whatWasFixed: "Removed or commented out console.log statement",
+        whyItMatters: "Console logs in production can expose sensitive data, clutter user's browser console, and impact performance. They're debugging tools, not production features.",
+        impact: "Improves security, performance, and user experience",
+        learnMore: "Use proper logging libraries for production applications"
+      };
+    }
+
+    // Strict equality
+    if (rule.includes('eqeqeq') || message.includes('strict equality') || message.includes('===')) {
+      return {
+        whatWasFixed: "Changed loose equality (==) to strict equality (===)",
+        whyItMatters: "Loose equality performs type coercion, which can lead to unexpected results like '0' == 0 being true. Strict equality compares both value and type.",
+        impact: "Prevents type coercion bugs and makes comparisons more predictable",
+        learnMore: "Type coercion can cause subtle bugs that are hard to debug"
+      };
+    }
+
+    // Error handling
+    if (rule.includes('error') || message.includes('error handling') || message.includes('try-catch')) {
+      return {
+        whatWasFixed: "Added try-catch block around async operation",
+        whyItMatters: "Unhandled async errors can crash your application. Network requests, file operations, and API calls can fail for many reasons (network issues, server errors, etc.).",
+        impact: "Prevents app crashes and provides better user experience",
+        learnMore: "Always handle errors in async operations to build robust applications"
+      };
+    }
+
+    // Unused variables
+    if (rule.includes('unused') || message.includes('unused')) {
+      return {
+        whatWasFixed: "Prefixed variable name with underscore to indicate intentional non-use",
+        whyItMatters: "Unused variables can indicate dead code, typos, or incomplete features. The underscore prefix is a convention that tells linters and developers this is intentional.",
+        impact: "Cleaner code without warnings and better team communication",
+        learnMore: "Clean code principles suggest removing unused code or clearly marking it as intentional"
+      };
+    }
+
+    // Security issues (innerHTML)
+    if (rule.includes('innerHTML') || message.includes('xss')) {
+      return {
+        whatWasFixed: "Changed innerHTML to textContent for safer text insertion",
+        whyItMatters: "innerHTML can execute malicious scripts if user input contains HTML/JavaScript, leading to XSS attacks. textContent safely sets text without interpreting HTML.",
+        impact: "Prevents XSS attacks and protects user data",
+        learnMore: "Always sanitize user input and use safe DOM manipulation methods"
+      };
+    }
+
+    // Default explanation
+    return {
+      whatWasFixed: `Applied fix according to ${issue.rule || 'coding standards'}`,
+      whyItMatters: "This change follows industry best practices and improves code quality",
+      impact: "Better maintainability and fewer potential bugs",
+      learnMore: "Following coding standards makes code more readable and maintainable"
+    };
   }
 
   private async autoCloseRelatedIssues(owner: string, repo: string, fixedIssues: CodeIssue[]) {
@@ -531,12 +640,20 @@ Auto-fixed by ReviewAI`;
         if (isReviewAIIssue) {
           console.log(`Found ReviewAI issue to close: #${issue.number} - ${issue.title}`);
           
-          // Create a detailed resolution comment
+          // Create a detailed resolution comment with educational content
           const closeComment = `🤖 **ReviewAI Auto-Resolution**
 
-This issue has been automatically resolved! The following fixes were applied:
+This issue has been automatically resolved! Here's what was fixed and why it matters:
 
-${fixedIssues.map(issue => `- ✅ **Fixed**: ${issue.message} in \`${issue.file}:${issue.line}\``).join('\n')}
+${fixedIssues.map(issue => {
+  const explanation = this.getDetailedFixExplanation(issue);
+  return `## 📍 ${issue.file}:${issue.line}
+**Issue**: ${issue.message}
+**Fix Applied**: ${explanation.whatWasFixed}
+**Why This Matters**: ${explanation.whyItMatters}
+**Impact**: ${explanation.impact}
+**Learning Tip**: ${explanation.learnMore}`;
+}).join('\n\n')}
 
 ## 📊 Summary
 - **${fixedIssues.length}** issues automatically fixed
@@ -544,8 +661,15 @@ ${fixedIssues.map(issue => `- ✅ **Fixed**: ${issue.message} in \`${issue.file}
 - Code quality improvements applied
 - Best practices enforced
 
+## 🎓 Educational Notes
+Each fix above teaches you something important about writing better code. Understanding these patterns will help you:
+- Write more secure code
+- Avoid common pitfalls
+- Follow industry standards
+- Build more maintainable applications
+
 ## 🔗 Changes
-The fixes have been committed to the repository. You can review the changes in the commit history.
+The fixes have been committed with detailed explanations. Check the commit messages to learn more about each fix!
 
 ---
 *🔧 Automatically resolved by ReviewAI • [View commits](https://github.com/${owner}/${repo}/commits)*`;
