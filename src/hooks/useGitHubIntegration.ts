@@ -660,6 +660,7 @@ export const useGitHubIntegration = () => {
     setRecentActivity([]);
   };
 
+  // FIXED: Proper refresh function that actually fetches new data
   const refreshData = async () => {
     const token = localStorage.getItem('github_token');
     if (token && isConnected) {
@@ -667,7 +668,9 @@ export const useGitHubIntegration = () => {
         setLoading(true);
         const github = new GitHubService(token);
         
-        // Get all repositories (including private ones)
+        console.log('🔄 Refreshing GitHub data...');
+        
+        // Get all repositories (including private ones) - FRESH DATA
         const publicRepos = await github.getRepositories();
         
         // Try to get private repositories as well
@@ -684,10 +687,15 @@ export const useGitHubIntegration = () => {
           index === self.findIndex(r => r.id === repo.id)
         );
         
+        console.log(`✅ Fetched ${uniqueRepos.length} repositories`);
+        
         setRepositories(uniqueRepos);
         await loadDashboardData(github, uniqueRepos);
+        
+        console.log('✅ Dashboard data refreshed successfully');
       } catch (error) {
-        console.error('Failed to refresh data:', error);
+        console.error('❌ Failed to refresh data:', error);
+        setError('Failed to refresh data');
       } finally {
         setLoading(false);
       }
@@ -739,7 +747,7 @@ export const useGitHubIntegration = () => {
     removeSingleIssue, // Function to remove single issues
     clearAllIssues, // NEW: Function to clear all issues
     disconnect,
-    refreshData,
+    refreshData, // FIXED: Now actually refreshes data
   };
 };
 

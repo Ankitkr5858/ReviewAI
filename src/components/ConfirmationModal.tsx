@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { AlertTriangle, X, Wand2 } from 'lucide-react';
+import LoadingSpinner from './LoadingSpinner';
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -112,10 +113,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
               whileTap={{ scale: loading ? 1 : 0.98 }}
             >
               {loading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Applying...
-                </>
+                <LoadingSpinner size="sm" text="Applying..." />
               ) : (
                 <>
                   <Wand2 size={16} />

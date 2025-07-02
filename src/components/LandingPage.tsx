@@ -23,15 +23,34 @@ import {
   GitMerge
 } from 'lucide-react';
 import FeedbackSection from './FeedbackSection';
+import { useNavigate } from 'react-router-dom';
 
 interface LandingPageProps {
   onGetStarted: () => void;
 }
 
 const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
+  const navigate = useNavigate();
   const [hoveredFeature, setHoveredFeature] = useState<number | null>(null);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual');
   const [currentSlide, setCurrentSlide] = useState(0);
+
+  // FIXED: Navigate to /dashboard instead of calling onGetStarted
+  const handleGetStarted = () => {
+    navigate('/dashboard');
+  };
+
+  // FIXED: Smooth scroll to sections
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start',
+        inline: 'nearest'
+      });
+    }
+  };
 
   const features = [
     {
@@ -500,11 +519,35 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               </div>
             </motion.div>
 
+            {/* FIXED: Navigation with smooth scrolling */}
             <nav className="hidden md:flex items-center gap-8">
-              <a href="#features" className="text-gray-600 hover:text-gray-900 transition-colors">Features</a>
-              <a href="#testimonials" className="text-gray-600 hover:text-gray-900 transition-colors">Reviews</a>
               <motion.button
-                onClick={onGetStarted}
+                onClick={() => scrollToSection('features')}
+                className="text-gray-600 hover:text-gray-900 transition-colors"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                Features
+              </motion.button>
+              <motion.button
+                onClick={() => scrollToSection('testimonials')}
+                className="text-gray-600 hover:text-gray-900 transition-colors"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                Reviews
+              </motion.button>
+              {/* FIXED: NEW Feedback option */}
+              <motion.button
+                onClick={() => scrollToSection('feedback')}
+                className="text-gray-600 hover:text-gray-900 transition-colors"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                Feedback
+              </motion.button>
+              <motion.button
+                onClick={handleGetStarted}
                 className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-all font-medium shadow-xl"
                 whileHover={{ 
                   scale: 1.05, 
@@ -558,7 +601,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               className="flex justify-center mb-12"
             >
               <motion.button
-                onClick={onGetStarted}
+                onClick={handleGetStarted}
                 className="flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-all text-lg font-medium shadow-xl"
                 whileHover={{ 
                   scale: 1.05, 
@@ -853,8 +896,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </section>
 
-      {/* FEEDBACK SECTION - ADDED BACK */}
-      <FeedbackSection />
+      {/* FEEDBACK SECTION - ADDED BACK with ID for scrolling */}
+      <div id="feedback">
+        <FeedbackSection />
+      </div>
 
       {/* CTA Section */}
       <section className="py-20 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
@@ -872,7 +917,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             </p>
             
             <motion.button
-              onClick={onGetStarted}
+              onClick={handleGetStarted}
               className="inline-flex items-center gap-2 px-8 py-4 bg-white text-gray-900 rounded-full hover:bg-gray-100 transition-colors text-lg font-medium shadow-xl"
               whileHover={{ 
                 scale: 1.05, 

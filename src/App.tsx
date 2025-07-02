@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Dashboard from './components/Dashboard';
 import Repositories from './components/Repositories';
@@ -12,20 +12,23 @@ import LandingPage from './components/LandingPage';
 import AdminRoute from './components/AdminRoute';
 import { useGitHubIntegration } from './hooks/useGitHubIntegration';
 
-function App() {
+function AppContent() {
   const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false);
-  const [showLanding, setShowLanding] = useState(true);
   const { isConnected } = useGitHubIntegration();
+  const location = useLocation();
 
-  // Show landing page first
+  // FIXED: Show landing page when on root path, regardless of connection status
+  const showLanding = location.pathname === '/' || location.pathname === '';
+  
+  // Show setup screen if trying to access app routes but not connected
+  const isAppRoute = ['/dashboard', '/repositories', '/test', '/settings'].includes(location.pathname);
+  const showSetup = !isConnected && isAppRoute;
+
   if (showLanding) {
-    return (
-      <LandingPage onGetStarted={() => setShowLanding(false)} />
-    );
+    return <LandingPage onGetStarted={() => {}} />;
   }
 
-  // Show setup screen if not connected to GitHub
-  if (!isConnected) {
+  if (showSetup) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <GitHubSetup />
@@ -34,33 +37,40 @@ function App() {
   }
 
   return (
-    <Router>
-      <div className="min-h-screen bg-gray-50 font-sans">
-        {/* NO SIDEBAR - Full width layout */}
-        <main className="min-h-screen">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="h-full"
-          >
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/repositories" element={<Repositories />} />
-              <Route path="/review/:id" element={<CodeReview />} />
-              <Route path="/test" element={<TestReview />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/admin" element={<AdminRoute />} />
-            </Routes>
-          </motion.div>
-        </main>
+    <div className="min-h-screen bg-gray-50 font-sans">
+      {/* NO SIDEBAR - Full width layout */}
+      <main className="min-h-screen">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="h-full"
+        >
+          <Routes>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/repositories" element={<Repositories />} />
+            <Route path="/review/:id" element={<CodeReview />} />
+            <Route path="/test" element={<TestReview />} />
+            <Route path="/settings" element={<Settings />} />
+            {/* HIDDEN: Admin route - only accessible via direct URL */}
+            <Route path="/admin" element={<AdminRoute />} />
+          </Routes>
+        </motion.div>
+      </main>
 
-        <AnimatePresence>
-          {subscriptionModalOpen && (
-            <SubscriptionModal onClose={() => setSubscriptionModalOpen(false)} />
-          )}
-        </AnimatePresence>
-      </div>
+      <AnimatePresence>
+        {subscriptionModalOpen && (
+          <SubscriptionModal onClose={() => setSubscriptionModalOpen(false)} />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
     </Router>
   );
 }

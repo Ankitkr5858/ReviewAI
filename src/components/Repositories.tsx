@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { useGitHubIntegration } from '../hooks/useGitHubIntegration';
 import SubscriptionModal from './SubscriptionModal';
 import Header from './Header';
+import OverlaySpinner from './OverlaySpinner';
 
 const Repositories: React.FC = () => {
   const navigate = useNavigate();
@@ -25,6 +26,8 @@ const Repositories: React.FC = () => {
   const [filter, setFilter] = useState('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const { repositories, loading, refreshData } = useGitHubIntegration();
 
   const statusOptions = [
@@ -143,6 +146,30 @@ const Repositories: React.FC = () => {
     navigate('/test', { state: { selectedRepo: repo.full_name } });
   };
 
+  // FIXED: Handle refresh with overlay spinner
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+      // Add a small delay to show the spinner
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // FIXED: Handle sync with overlay spinner
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await refreshData();
+      // Add a small delay to show the spinner
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const selectedFilterOption = statusOptions.find(option => option.value === filter);
 
   return (
@@ -151,6 +178,16 @@ const Repositories: React.FC = () => {
       <Header 
         onMenuClick={() => {}} 
         onSubscriptionClick={() => setShowSubscriptionModal(true)}
+      />
+
+      {/* OVERLAY SPINNERS */}
+      <OverlaySpinner 
+        isVisible={refreshing} 
+        text="Refreshing repositories..." 
+      />
+      <OverlaySpinner 
+        isVisible={syncing} 
+        text="Syncing repositories..." 
       />
 
       {/* CENTERED CONTENT WITH EQUAL MARGINS - LIKE LANDING PAGE */}
@@ -171,8 +208,8 @@ const Repositories: React.FC = () => {
             </div>
             <div className="flex items-center gap-3">
               <motion.button
-                onClick={refreshData}
-                disabled={loading}
+                onClick={handleRefresh}
+                disabled={loading || refreshing || syncing}
                 className="flex items-center gap-2 px-6 py-3 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
                 whileHover={{ 
                   scale: 1.05, 
@@ -181,17 +218,18 @@ const Repositories: React.FC = () => {
                 whileTap={{ scale: 0.95 }}
                 transition={{ duration: 0.1 }}
               >
-                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                <RefreshCw size={16} className={(loading || refreshing) ? 'animate-spin' : ''} />
                 Refresh
               </motion.button>
               <motion.button
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-colors cursor-pointer"
+                onClick={handleSync}
+                disabled={loading || refreshing || syncing}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-colors disabled:opacity-50 cursor-pointer"
                 whileHover={{ 
                   scale: 1.05, 
                   boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
                 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={refreshData}
                 transition={{ duration: 0.1 }}
               >
                 <Plus size={18} />
@@ -429,7 +467,7 @@ const Repositories: React.FC = () => {
                   boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
                 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={refreshData}
+                onClick={handleSync}
                 transition={{ duration: 0.1 }}
               >
                 Sync Repositories

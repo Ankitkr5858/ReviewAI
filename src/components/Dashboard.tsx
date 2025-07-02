@@ -18,13 +18,15 @@ import {
   User,
   LogOut,
   Settings as SettingsIcon,
-  Menu
+  Menu,
+  Play
 } from 'lucide-react';
 import StatsCard from './StatsCard';
 import RecentActivity from './RecentActivity';
 import ActiveReviews from './ActiveReviews';
 import SubscriptionModal from './SubscriptionModal';
 import Header from './Header';
+import OverlaySpinner from './OverlaySpinner';
 import { useGitHubIntegration } from '../hooks/useGitHubIntegration';
 import { useNavigate } from 'react-router-dom';
 
@@ -41,6 +43,7 @@ const Dashboard: React.FC = () => {
   } = useGitHubIntegration();
 
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [realTimeStats, setRealTimeStats] = useState({
     weeklyGrowth: 0,
@@ -121,6 +124,18 @@ const Dashboard: React.FC = () => {
         return timeSaved > 0 ? `+${Math.round(timeSaved / 7)}h` : '0h';
       default:
         return '0%';
+    }
+  };
+
+  // FIXED: Handle refresh with overlay spinner
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+      // Add a small delay to show the spinner
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -211,6 +226,12 @@ const Dashboard: React.FC = () => {
         onSubscriptionClick={() => setShowSubscriptionModal(true)}
       />
 
+      {/* OVERLAY SPINNER for refresh */}
+      <OverlaySpinner 
+        isVisible={refreshing} 
+        text="Refreshing dashboard data..." 
+      />
+
       {/* CENTERED CONTENT WITH EQUAL MARGINS - LIKE LANDING PAGE */}
       <div className="flex justify-center px-6 py-6">
         <div className="w-full max-w-7xl mx-auto">
@@ -242,8 +263,8 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
             <motion.button
-              onClick={refreshData}
-              disabled={loading}
+              onClick={handleRefresh}
+              disabled={loading || refreshing}
               className="flex items-center gap-2 px-6 py-3 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
               whileHover={{ 
                 scale: 1.05, 
@@ -252,7 +273,7 @@ const Dashboard: React.FC = () => {
               whileTap={{ scale: 0.95 }}
               transition={{ duration: 0.1 }}
             >
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+              <RefreshCw size={16} className={(loading || refreshing) ? 'animate-spin' : ''} />
               Refresh
             </motion.button>
           </motion.div>

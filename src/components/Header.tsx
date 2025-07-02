@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, Wand2, User, LogOut, Settings, ChevronDown, Home, GitBranch, Play, BarChart3 } from 'lucide-react';
+import { Menu, Wand2, User, LogOut, Settings, ChevronDown, Home, GitBranch, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useGitHubIntegration } from '../hooks/useGitHubIntegration';
@@ -17,10 +17,11 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
   const [userInfo, setUserInfo] = useState({
     name: 'User',
     email: 'user@example.com',
-    avatar: ''
+    avatar: '',
+    loading: true
   });
 
-  // Get real user info from GitHub
+  // Get real user info from GitHub - ONLY ONCE on mount
   useEffect(() => {
     const fetchUserInfo = async () => {
       const token = localStorage.getItem('github_token');
@@ -38,17 +39,23 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
             setUserInfo({
               name: userData.name || userData.login || 'User',
               email: userData.email || `${userData.login}@github.com`,
-              avatar: userData.avatar_url || ''
+              avatar: userData.avatar_url || '',
+              loading: false
             });
+          } else {
+            setUserInfo(prev => ({ ...prev, loading: false }));
           }
         } catch (error) {
           console.error('Failed to fetch user info:', error);
+          setUserInfo(prev => ({ ...prev, loading: false }));
         }
+      } else {
+        setUserInfo(prev => ({ ...prev, loading: false }));
       }
     };
 
     fetchUserInfo();
-  }, []);
+  }, []); // FIXED: Only run once on mount
 
   const handleLogout = () => {
     disconnect();
@@ -67,26 +74,33 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
       .slice(0, 2);
   };
 
-  // Navigation items with proper routing
+  // FIXED: Navigation items WITHOUT Admin Panel
   const navigationItems = [
-    { path: '/', label: 'Dashboard', icon: Home },
+    { path: '/dashboard', label: 'Dashboard', icon: Home },
     { path: '/repositories', label: 'Repositories', icon: GitBranch },
     { path: '/test', label: 'Test Review', icon: Play },
-    { path: '/admin', label: 'Admin Panel', icon: BarChart3 },
   ];
 
   const isActivePath = (path: string) => {
-    if (path === '/') {
-      return location.pathname === '/';
+    if (path === '/dashboard') {
+      return location.pathname === '/' || location.pathname === '/dashboard';
     }
     return location.pathname.startsWith(path);
   };
 
+  // FIXED: Simple navigation without loading state
+  const handleNavigation = (path: string) => {
+    if (location.pathname === path) return; // Don't navigate if already on the page
+    navigate(path);
+  };
+
   return (
     <header className="border-b border-gray-100 bg-white/95 backdrop-blur-md sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-8">
+      {/* FIXED: Proper container with balanced spacing */}
+      <div className="w-full px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          {/* Left side - Logo */}
+          <div className="flex items-center gap-4">
             <button
               onClick={onMenuClick}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors lg:hidden cursor-pointer"
@@ -94,6 +108,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
               <Menu size={20} />
             </button>
             
+            {/* FIXED: Logo now goes to landing page */}
             <motion.button
               onClick={() => navigate('/')}
               className="flex items-center gap-3 cursor-pointer"
@@ -108,29 +123,46 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
                 <p className="text-xs text-gray-500">Automated Code Review</p>
               </div>
             </motion.button>
-
-            {/* Navigation Menu */}
-            <nav className="hidden md:flex items-center gap-1">
-              {navigationItems.map((item) => (
-                <motion.button
-                  key={item.path}
-                  onClick={() => navigate(item.path)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                    isActivePath(item.path)
-                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  }`}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  transition={{ duration: 0.1 }}
-                >
-                  <item.icon size={16} />
-                  <span className="font-medium">{item.label}</span>
-                </motion.button>
-              ))}
-            </nav>
           </div>
 
+          {/* FIXED: Center navigation - SLOWER and SMOOTHER animations */}
+          <nav className="hidden md:flex items-center gap-1 relative">
+            {navigationItems.map((item) => (
+              <motion.button
+                key={item.path}
+                onClick={() => handleNavigation(item.path)}
+                className={`relative flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${
+                  isActivePath(item.path)
+                    ? 'text-white'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ duration: 0.2 }}
+                layout
+              >
+                {/* FIXED: SLOWER background animation with layout ID */}
+                {isActivePath(item.path) && (
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg"
+                    layoutId="activeTab"
+                    transition={{
+                      type: "spring",
+                      stiffness: 300,
+                      damping: 25,
+                      duration: 0.4
+                    }}
+                  />
+                )}
+                <div className="relative z-10 flex items-center gap-2">
+                  <item.icon size={16} />
+                  <span className="font-medium">{item.label}</span>
+                </div>
+              </motion.button>
+            ))}
+          </nav>
+
+          {/* Right side - User menu */}
           <div className="flex items-center gap-4">
             {/* User Menu */}
             <div className="relative">
@@ -144,7 +176,12 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
                 whileTap={{ scale: 0.95 }}
                 transition={{ duration: 0.1 }}
               >
-                {userInfo.avatar ? (
+                {/* FIXED: Show loading state for avatar */}
+                {userInfo.loading ? (
+                  <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                    <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : userInfo.avatar ? (
                   <img
                     src={userInfo.avatar}
                     alt={userInfo.name}
@@ -185,7 +222,11 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
                       {/* User Info */}
                       <div className="p-4 border-b border-gray-200 bg-gray-50">
                         <div className="flex items-center gap-3">
-                          {userInfo.avatar ? (
+                          {userInfo.loading ? (
+                            <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                            </div>
+                          ) : userInfo.avatar ? (
                             <img
                               src={userInfo.avatar}
                               alt={userInfo.name}
@@ -207,12 +248,12 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
 
                       {/* Menu Items */}
                       <div className="p-2">
-                        {/* Quick Navigation */}
+                        {/* FIXED: Quick Navigation WITHOUT Admin Panel */}
                         {navigationItems.map((item) => (
                           <motion.button
                             key={item.path}
                             onClick={() => {
-                              navigate(item.path);
+                              handleNavigation(item.path);
                               setShowUserMenu(false);
                             }}
                             className={`w-full flex items-center gap-3 px-3 py-2 text-left rounded-lg transition-colors ${
