@@ -1,28 +1,82 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Github, Key, Zap, AlertCircle, CheckCircle, ExternalLink } from 'lucide-react';
+import { Github, Key, Zap, AlertCircle, CheckCircle, ExternalLink, GitlabIcon, Box } from 'lucide-react';
 import { useGitHubIntegration } from '../hooks/useGitHubIntegration';
 
 const GitHubSetup: React.FC = () => {
   const [githubToken, setGithubToken] = useState('');
   const [openaiKey, setOpenaiKey] = useState('');
   const [showTokens, setShowTokens] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<'github' | 'gitlab' | 'bitbucket'>('github');
   const { connectGitHub, loading, error, isConnected } = useGitHubIntegration();
 
   const handleConnect = async () => {
     if (!githubToken || !openaiKey) {
-      alert('Please provide both GitHub token and OpenAI API key');
+      alert('Please provide both Git provider token and OpenAI API key');
       return;
     }
 
     // Store OpenAI key
     localStorage.setItem('openai_api_key', openaiKey);
     
-    const result = await connectGitHub(githubToken);
-    if (result.success) {
-      alert('Successfully connected to GitHub!');
+    // Connect to selected Git provider
+    if (selectedProvider === 'github') {
+      const result = await connectGitHub(githubToken);
+      if (result.success) {
+        alert('Successfully connected to GitHub!');
+      }
+    } else if (selectedProvider === 'gitlab') {
+      const result = await connectGitHub(githubToken);
+      if (result.success) {
+        alert('Successfully connected to GitLab!');
+      }
+    } else if (selectedProvider === 'bitbucket') {
+      const result = await connectGitHub(githubToken);
+      if (result.success) {
+        alert('Successfully connected to Bitbucket!');
+      }
     }
   };
+
+  const getProviderInfo = () => {
+    switch (selectedProvider) {
+      case 'github':
+        return {
+          name: 'GitHub',
+          icon: Github,
+          tokenUrl: 'https://github.com/settings/tokens/new?scopes=repo,read:user,user:email',
+          scopes: 'repo, read:user, user:email',
+          placeholder: 'ghp_xxxxxxxxxxxxxxxxxxxx'
+        };
+      case 'gitlab':
+        return {
+          name: 'GitLab',
+          icon: GitlabIcon,
+          tokenUrl: 'https://gitlab.com/-/profile/personal_access_tokens',
+          scopes: 'api, read_repository',
+          placeholder: 'glpat-xxxxxxxxxxxxxxxxxxxx'
+        };
+      case 'bitbucket':
+        return {
+          name: 'Bitbucket',
+          icon: Box,
+          tokenUrl: 'https://bitbucket.org/account/settings/app-passwords/new',
+          scopes: 'repository, pullrequest',
+          placeholder: 'BITBUCKET_APP_PASSWORD'
+        };
+      default:
+        return {
+          name: 'GitHub',
+          icon: Github,
+          tokenUrl: 'https://github.com/settings/tokens/new?scopes=repo,read:user,user:email',
+          scopes: 'repo, read:user, user:email',
+          placeholder: 'ghp_xxxxxxxxxxxxxxxxxxxx'
+        };
+    }
+  };
+
+  const providerInfo = getProviderInfo();
+  const ProviderIcon = providerInfo.icon;
 
   if (isConnected) {
     return (
@@ -60,9 +114,9 @@ const GitHubSetup: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
       >
         <div className="p-3 bg-black rounded-lg inline-block mb-4">
-          <Github size={32} className="text-white" />
+          <ProviderIcon size={32} className="text-white" />
         </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Connect GitHub Account</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Connect {providerInfo.name} Account</h2>
         <p className="text-gray-600">
           Set up ReviewAI to automatically review your repositories
         </p>
@@ -76,18 +130,71 @@ const GitHubSetup: React.FC = () => {
       >
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Required Setup</h3>
         
+        {/* Git Provider Selection */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Select Git Provider
+          </label>
+          <div className="grid grid-cols-3 gap-3">
+            <motion.button
+              type="button"
+              onClick={() => setSelectedProvider('github')}
+              className={`flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-all ${
+                selectedProvider === 'github' 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Github size={24} className={selectedProvider === 'github' ? 'text-blue-600' : 'text-gray-700'} />
+              <span className={selectedProvider === 'github' ? 'text-blue-600' : 'text-gray-700'}>GitHub</span>
+            </motion.button>
+            
+            <motion.button
+              type="button"
+              onClick={() => setSelectedProvider('gitlab')}
+              className={`flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-all ${
+                selectedProvider === 'gitlab' 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <GitlabIcon size={24} className={selectedProvider === 'gitlab' ? 'text-blue-600' : 'text-gray-700'} />
+              <span className={selectedProvider === 'gitlab' ? 'text-blue-600' : 'text-gray-700'}>GitLab</span>
+            </motion.button>
+            
+            <motion.button
+              type="button"
+              onClick={() => setSelectedProvider('bitbucket')}
+              className={`flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-all ${
+                selectedProvider === 'bitbucket' 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Box size={24} className={selectedProvider === 'bitbucket' ? 'text-blue-600' : 'text-gray-700'} />
+              <span className={selectedProvider === 'bitbucket' ? 'text-blue-600' : 'text-gray-700'}>Bitbucket</span>
+            </motion.button>
+          </div>
+        </div>
+        
         <div className="space-y-6">
-          {/* GitHub Token */}
+          {/* Git Provider Token */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              GitHub Personal Access Token
+              {providerInfo.name} Personal Access Token
             </label>
             <div className="space-y-2">
               <input
                 type={showTokens ? 'text' : 'password'}
                 value={githubToken}
                 onChange={(e) => setGithubToken(e.target.value)}
-                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                placeholder={providerInfo.placeholder}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
               />
               <div className="flex items-center justify-between">
@@ -99,7 +206,7 @@ const GitHubSetup: React.FC = () => {
                   {showTokens ? 'Hide' : 'Show'} tokens
                 </button>
                 <a
-                  href="https://github.com/settings/tokens/new?scopes=repo,read:user,user:email"
+                  href={providerInfo.tokenUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
@@ -110,7 +217,7 @@ const GitHubSetup: React.FC = () => {
               </div>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Required scopes: repo, read:user, user:email
+              Required scopes: {providerInfo.scopes}
             </p>
           </div>
 
@@ -186,7 +293,7 @@ const GitHubSetup: React.FC = () => {
         <ol className="space-y-2 text-sm text-gray-600">
           <li className="flex items-start gap-2">
             <span className="bg-black text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium">1</span>
-            Create a GitHub Personal Access Token with repo permissions
+            Create a {providerInfo.name}, GitHub or GitLab Personal Access Token with repo permissions
           </li>
           <li className="flex items-start gap-2">
             <span className="bg-black text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium">2</span>

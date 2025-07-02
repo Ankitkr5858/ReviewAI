@@ -10,6 +10,7 @@ import GitHubSetup from './components/GitHubSetup';
 import TestReview from './components/TestReview';
 import LandingPage from './components/LandingPage';
 import AdminRoute from './components/AdminRoute';
+import EmailNotificationService from './components/EmailNotificationService';
 import { useGitHubIntegration } from './hooks/useGitHubIntegration';
 
 function AppContent() {
@@ -63,6 +64,9 @@ function AppContent() {
           <SubscriptionModal onClose={() => setSubscriptionModalOpen(false)} />
         )}
       </AnimatePresence>
+
+      {/* Email Notification Service */}
+      <EmailNotificationService />
     </div>
   );
 }

@@ -20,37 +20,20 @@ import {
   ChevronRight,
   Search,
   Settings,
-  GitMerge
+  GitMerge,
+  Menu
 } from 'lucide-react';
 import FeedbackSection from './FeedbackSection';
-import { useNavigate } from 'react-router-dom';
 
 interface LandingPageProps {
   onGetStarted: () => void;
 }
 
 const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
-  const navigate = useNavigate();
   const [hoveredFeature, setHoveredFeature] = useState<number | null>(null);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual');
   const [currentSlide, setCurrentSlide] = useState(0);
-
-  // FIXED: Navigate to /dashboard instead of calling onGetStarted
-  const handleGetStarted = () => {
-    navigate('/dashboard');
-  };
-
-  // FIXED: Smooth scroll to sections
-  const scrollToSection = (sectionId: string) => {
-    const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView({ 
-        behavior: 'smooth',
-        block: 'start',
-        inline: 'nearest'
-      });
-    }
-  };
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const features = [
     {
@@ -499,6 +482,82 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
     return () => clearInterval(timer);
   }, []);
 
+  // Scroll to section function
+  const scrollToSection = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  // Competitor comparison data
+  const competitors = [
+    {
+      name: 'ReviewAI',
+      features: {
+        aiPowered: true,
+        autoFix: true,
+        securityScanning: true,
+        performanceAnalysis: true,
+        githubIntegration: true,
+        gitlabIntegration: true,
+        bitbucketIntegration: true,
+        setupTime: '2 min',
+        price: '$12/year',
+        teamCollaboration: true,
+        customRules: true
+      }
+    },
+    {
+      name: 'SonarQube',
+      features: {
+        aiPowered: false,
+        autoFix: false,
+        securityScanning: true,
+        performanceAnalysis: true,
+        githubIntegration: true,
+        gitlabIntegration: true,
+        bitbucketIntegration: false,
+        setupTime: '30+ min',
+        price: '$120/year',
+        teamCollaboration: true,
+        customRules: true
+      }
+    },
+    {
+      name: 'DeepSource',
+      features: {
+        aiPowered: true,
+        autoFix: true,
+        securityScanning: true,
+        performanceAnalysis: false,
+        githubIntegration: true,
+        gitlabIntegration: false,
+        bitbucketIntegration: false,
+        setupTime: '10 min',
+        price: '$99/year',
+        teamCollaboration: true,
+        customRules: false
+      }
+    },
+    {
+      name: 'CodeClimate',
+      features: {
+        aiPowered: false,
+        autoFix: false,
+        securityScanning: true,
+        performanceAnalysis: true,
+        githubIntegration: true,
+        gitlabIntegration: false,
+        bitbucketIntegration: false,
+        setupTime: '15 min',
+        price: '$199/year',
+        teamCollaboration: true,
+        customRules: true
+      }
+    }
+  ];
+
   return (
     <div className="min-h-screen bg-white font-sans">
       {/* Header */}
@@ -519,35 +578,50 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               </div>
             </motion.div>
 
-            {/* FIXED: Navigation with smooth scrolling */}
+            {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center gap-8">
-              <motion.button
-                onClick={() => scrollToSection('features')}
+              <a 
+                href="#features" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToSection('features');
+                }}
                 className="text-gray-600 hover:text-gray-900 transition-colors"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
               >
                 Features
-              </motion.button>
-              <motion.button
-                onClick={() => scrollToSection('testimonials')}
+              </a>
+              <a 
+                href="#compare" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToSection('compare');
+                }}
                 className="text-gray-600 hover:text-gray-900 transition-colors"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+              >
+                Compare
+              </a>
+              <a 
+                href="#reviews" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToSection('reviews');
+                }}
+                className="text-gray-600 hover:text-gray-900 transition-colors"
               >
                 Reviews
-              </motion.button>
-              {/* FIXED: NEW Feedback option */}
-              <motion.button
-                onClick={() => scrollToSection('feedback')}
+              </a>
+              <a 
+                href="#feedback" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToSection('feedback');
+                }}
                 className="text-gray-600 hover:text-gray-900 transition-colors"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
               >
                 Feedback
-              </motion.button>
+              </a>
               <motion.button
-                onClick={handleGetStarted}
+                onClick={onGetStarted}
                 className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-all font-medium shadow-xl"
                 whileHover={{ 
                   scale: 1.05, 
@@ -560,7 +634,83 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 Get Started
               </motion.button>
             </nav>
+
+            {/* Mobile Menu Button */}
+            <div className="md:hidden">
+              <button 
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="p-2 rounded-lg hover:bg-gray-100"
+              >
+                {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+              </button>
+            </div>
           </div>
+
+          {/* Mobile Menu */}
+          {mobileMenuOpen && (
+            <motion.div 
+              className="md:hidden py-4 space-y-4"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <a 
+                href="#features" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToSection('features');
+                  setMobileMenuOpen(false);
+                }}
+                className="block py-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                Features
+              </a>
+              <a 
+                href="#compare" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToSection('compare');
+                  setMobileMenuOpen(false);
+                }}
+                className="block py-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                Compare
+              </a>
+              <a 
+                href="#reviews" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToSection('reviews');
+                  setMobileMenuOpen(false);
+                }}
+                className="block py-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                Reviews
+              </a>
+              <a 
+                href="#feedback" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToSection('feedback');
+                  setMobileMenuOpen(false);
+                }}
+                className="block py-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                Feedback
+              </a>
+              <motion.button
+                onClick={() => {
+                  onGetStarted();
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-all font-medium"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                Get Started
+              </motion.button>
+            </motion.div>
+          )}
         </div>
       </header>
 
@@ -580,7 +730,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 <span className="text-sm font-medium bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Powered by Advanced AI</span>
               </div>
               
-              <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight">
+              <h1 className="text-4xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight">
                 Code Reviews
                 <br />
                 <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -588,8 +738,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 </span>
               </h1>
               
-              <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-                AI-powered code reviews that catch bugs, security issues, and performance problems 
+              <p className="text-lg md:text-xl text-gray-600 mb-8 leading-relaxed">
+                AI-powered code reviews that <span className="text-blue-600 font-semibold">save 85% of review time</span> while catching bugs, security issues, and performance problems 
                 before they reach production. Get instant feedback and automated fixes for JavaScript, TypeScript, Python, and more.
               </p>
             </motion.div>
@@ -598,10 +748,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
-              className="flex justify-center mb-12"
+              className="flex flex-col sm:flex-row justify-center gap-4 mb-12"
             >
               <motion.button
-                onClick={handleGetStarted}
+                onClick={onGetStarted}
                 className="flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-all text-lg font-medium shadow-xl"
                 whileHover={{ 
                   scale: 1.05, 
@@ -612,7 +762,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 transition={{ duration: 0.1 }}
               >
                 <Github size={20} />
-                Start Free Review
+                Start Your Free Code Review
                 <ArrowRight size={20} />
               </motion.button>
             </motion.div>
@@ -624,7 +774,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               transition={{ duration: 0.8, delay: 0.3 }}
               className="mb-12"
             >
-              <div className="flex items-center justify-center gap-8 max-w-4xl mx-auto">
+              <div className="flex flex-col md:flex-row items-center justify-center gap-8 max-w-4xl mx-auto">
                 {steps.map((step, index) => (
                   <React.Fragment key={index}>
                     <motion.div
@@ -654,7 +804,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                     
                     {index < steps.length - 1 && (
                       <motion.div
-                        className="flex items-center"
+                        className="hidden md:flex items-center"
                         animate={{
                           opacity: currentStep >= index ? 1 : 0.3
                         }}
@@ -845,8 +995,226 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </section>
 
+      {/* Competitor Comparison Section */}
+      <section id="compare" className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              How <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">ReviewAI compares</span>
+            </h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              See how ReviewAI stacks up against other code review tools
+            </p>
+          </div>
+
+          {/* Comparison Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className="text-left p-4 border-b-2 border-gray-200"></th>
+                  {competitors.map((competitor, index) => (
+                    <th 
+                      key={index} 
+                      className={`p-4 border-b-2 border-gray-200 ${
+                        index === 0 ? 'bg-gradient-to-r from-blue-50 to-purple-50' : ''
+                      }`}
+                    >
+                      <div className={`text-lg font-bold ${index === 0 ? 'text-blue-600' : 'text-gray-900'}`}>
+                        {competitor.name}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="p-4 border-b border-gray-200 font-medium text-gray-700">AI-Powered Analysis</td>
+                  {competitors.map((competitor, index) => (
+                    <td 
+                      key={index} 
+                      className={`p-4 border-b border-gray-200 text-center ${
+                        index === 0 ? 'bg-gradient-to-r from-blue-50 to-purple-50' : ''
+                      }`}
+                    >
+                      {competitor.features.aiPowered ? (
+                        <CheckCircle className={`mx-auto ${index === 0 ? 'text-blue-600' : 'text-green-600'}`} size={20} />
+                      ) : (
+                        <X className="mx-auto text-red-600" size={20} />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="p-4 border-b border-gray-200 font-medium text-gray-700">Auto-Fix Capability</td>
+                  {competitors.map((competitor, index) => (
+                    <td 
+                      key={index} 
+                      className={`p-4 border-b border-gray-200 text-center ${
+                        index === 0 ? 'bg-gradient-to-r from-blue-50 to-purple-50' : ''
+                      }`}
+                    >
+                      {competitor.features.autoFix ? (
+                        <CheckCircle className={`mx-auto ${index === 0 ? 'text-blue-600' : 'text-green-600'}`} size={20} />
+                      ) : (
+                        <X className="mx-auto text-red-600" size={20} />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="p-4 border-b border-gray-200 font-medium text-gray-700">Security Scanning</td>
+                  {competitors.map((competitor, index) => (
+                    <td 
+                      key={index} 
+                      className={`p-4 border-b border-gray-200 text-center ${
+                        index === 0 ? 'bg-gradient-to-r from-blue-50 to-purple-50' : ''
+                      }`}
+                    >
+                      {competitor.features.securityScanning ? (
+                        <CheckCircle className={`mx-auto ${index === 0 ? 'text-blue-600' : 'text-green-600'}`} size={20} />
+                      ) : (
+                        <X className="mx-auto text-red-600" size={20} />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="p-4 border-b border-gray-200 font-medium text-gray-700">Performance Analysis</td>
+                  {competitors.map((competitor, index) => (
+                    <td 
+                      key={index} 
+                      className={`p-4 border-b border-gray-200 text-center ${
+                        index === 0 ? 'bg-gradient-to-r from-blue-50 to-purple-50' : ''
+                      }`}
+                    >
+                      {competitor.features.performanceAnalysis ? (
+                        <CheckCircle className={`mx-auto ${index === 0 ? 'text-blue-600' : 'text-green-600'}`} size={20} />
+                      ) : (
+                        <X className="mx-auto text-red-600" size={20} />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="p-4 border-b border-gray-200 font-medium text-gray-700">GitHub Integration</td>
+                  {competitors.map((competitor, index) => (
+                    <td 
+                      key={index} 
+                      className={`p-4 border-b border-gray-200 text-center ${
+                        index === 0 ? 'bg-gradient-to-r from-blue-50 to-purple-50' : ''
+                      }`}
+                    >
+                      {competitor.features.githubIntegration ? (
+                        <CheckCircle className={`mx-auto ${index === 0 ? 'text-blue-600' : 'text-green-600'}`} size={20} />
+                      ) : (
+                        <X className="mx-auto text-red-600" size={20} />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="p-4 border-b border-gray-200 font-medium text-gray-700">GitLab Integration</td>
+                  {competitors.map((competitor, index) => (
+                    <td 
+                      key={index} 
+                      className={`p-4 border-b border-gray-200 text-center ${
+                        index === 0 ? 'bg-gradient-to-r from-blue-50 to-purple-50' : ''
+                      }`}
+                    >
+                      {competitor.features.gitlabIntegration ? (
+                        <CheckCircle className={`mx-auto ${index === 0 ? 'text-blue-600' : 'text-green-600'}`} size={20} />
+                      ) : (
+                        <X className="mx-auto text-red-600" size={20} />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="p-4 border-b border-gray-200 font-medium text-gray-700">Bitbucket Integration</td>
+                  {competitors.map((competitor, index) => (
+                    <td 
+                      key={index} 
+                      className={`p-4 border-b border-gray-200 text-center ${
+                        index === 0 ? 'bg-gradient-to-r from-blue-50 to-purple-50' : ''
+                      }`}
+                    >
+                      {competitor.features.bitbucketIntegration ? (
+                        <CheckCircle className={`mx-auto ${index === 0 ? 'text-blue-600' : 'text-green-600'}`} size={20} />
+                      ) : (
+                        <X className="mx-auto text-red-600" size={20} />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="p-4 border-b border-gray-200 font-medium text-gray-700">Setup Time</td>
+                  {competitors.map((competitor, index) => (
+                    <td 
+                      key={index} 
+                      className={`p-4 border-b border-gray-200 text-center ${
+                        index === 0 ? 'bg-gradient-to-r from-blue-50 to-purple-50 font-bold text-blue-600' : 'font-medium text-gray-900'
+                      }`}
+                    >
+                      {competitor.features.setupTime}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="p-4 border-b border-gray-200 font-medium text-gray-700">Pricing</td>
+                  {competitors.map((competitor, index) => (
+                    <td 
+                      key={index} 
+                      className={`p-4 border-b border-gray-200 text-center ${
+                        index === 0 ? 'bg-gradient-to-r from-blue-50 to-purple-50 font-bold text-blue-600' : 'font-medium text-gray-900'
+                      }`}
+                    >
+                      {competitor.features.price}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="p-4 border-b border-gray-200 font-medium text-gray-700">Team Collaboration</td>
+                  {competitors.map((competitor, index) => (
+                    <td 
+                      key={index} 
+                      className={`p-4 border-b border-gray-200 text-center ${
+                        index === 0 ? 'bg-gradient-to-r from-blue-50 to-purple-50' : ''
+                      }`}
+                    >
+                      {competitor.features.teamCollaboration ? (
+                        <CheckCircle className={`mx-auto ${index === 0 ? 'text-blue-600' : 'text-green-600'}`} size={20} />
+                      ) : (
+                        <X className="mx-auto text-red-600" size={20} />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="p-4 border-b border-gray-200 font-medium text-gray-700">Custom Rules</td>
+                  {competitors.map((competitor, index) => (
+                    <td 
+                      key={index} 
+                      className={`p-4 border-b border-gray-200 text-center ${
+                        index === 0 ? 'bg-gradient-to-r from-blue-50 to-purple-50' : ''
+                      }`}
+                    >
+                      {competitor.features.customRules ? (
+                        <CheckCircle className={`mx-auto ${index === 0 ? 'text-blue-600' : 'text-green-600'}`} size={20} />
+                      ) : (
+                        <X className="mx-auto text-red-600" size={20} />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       {/* Testimonials Section */}
-      <section id="testimonials" className="py-20 bg-white">
+      <section id="reviews" className="py-20 bg-gradient-to-br from-gray-50 to-blue-50/30">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-gray-900 mb-4">
@@ -896,10 +1264,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </section>
 
-      {/* FEEDBACK SECTION - ADDED BACK with ID for scrolling */}
-      <div id="feedback">
+      {/* FEEDBACK SECTION - ADDED BACK */}
+      <section id="feedback">
         <FeedbackSection />
-      </div>
+      </section>
 
       {/* CTA Section */}
       <section className="py-20 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
@@ -917,7 +1285,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             </p>
             
             <motion.button
-              onClick={handleGetStarted}
+              onClick={onGetStarted}
               className="inline-flex items-center gap-2 px-8 py-4 bg-white text-gray-900 rounded-full hover:bg-gray-100 transition-colors text-lg font-medium shadow-xl"
               whileHover={{ 
                 scale: 1.05, 
@@ -928,7 +1296,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               transition={{ duration: 0.1 }}
             >
               <Github size={20} />
-              Start Your Free Review
+              Start Your Free Code Review
               <ArrowRight size={20} />
             </motion.button>
           </motion.div>
@@ -938,8 +1306,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col md:flex-row items-center justify-between">
+            <div className="flex items-center gap-3 mb-6 md:mb-0">
               <div className="p-2 bg-white rounded-lg">
                 <Wand2 size={20} className="text-gray-900" />
               </div>

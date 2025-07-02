@@ -32,21 +32,21 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         return {
           iconColor: 'text-red-600',
           iconBg: 'bg-red-100',
-          buttonColor: 'bg-red-600 hover:bg-red-700',
+          buttonColor: 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700', // FIXED: Brand color
           borderColor: 'border-red-200'
         };
       case 'info':
         return {
           iconColor: 'text-blue-600',
           iconBg: 'bg-blue-100',
-          buttonColor: 'bg-blue-600 hover:bg-blue-700',
+          buttonColor: 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700', // FIXED: Brand color
           borderColor: 'border-blue-200'
         };
       default:
         return {
           iconColor: 'text-orange-600',
           iconBg: 'bg-orange-100',
-          buttonColor: 'bg-orange-600 hover:bg-orange-700',
+          buttonColor: 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700', // FIXED: Brand color
           borderColor: 'border-orange-200'
         };
     }

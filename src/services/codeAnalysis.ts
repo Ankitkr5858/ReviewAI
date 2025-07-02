@@ -1,5 +1,3 @@
-import { CodeIssue } from './codeAnalysis';
-
 export interface CodeIssue {
   type: 'error' | 'warning' | 'info';
   severity: 'high' | 'medium' | 'low';
@@ -23,6 +21,7 @@ export interface AnalysisResult {
     complexity: number;
     maintainability: number;
     testCoverage?: number;
+    performanceScore?: number; // NEW: Performance score
   };
   suggestions: string[];
   fileHash?: string;
@@ -57,7 +56,7 @@ export class CodeAnalysisService {
     return this.generateFileHash(key);
   }
 
-  private checkForConflicts(fileContent: string): { hasConflicts: boolean; conflictDetails?: any } {
+  checkForConflicts(fileContent: string): { hasConflicts: boolean; conflictDetails?: any } {
     const conflictMarkers = [
       /^<{7}\s/gm,
       /^={7}$/gm,
@@ -197,6 +196,322 @@ export class CodeAnalysisService {
     ].join('\n');
   }
 
+  async analyzeChangedLines(fileContent: string, fileName: string, language: string, changedLines: number[]): Promise<AnalysisResult> {
+    try {
+      console.log(`Analyzing ${changedLines.length} changed lines in ${fileName}`);
+      
+      if (changedLines.length === 0) {
+        return {
+          issues: [],
+          metrics: { complexity: 0, maintainability: 100, performanceScore: 100 },
+          suggestions: [],
+        };
+      }
+
+      const staticIssues = this.performStaticAnalysisOnLines(fileContent, fileName, language, changedLines);
+      const performanceIssues = this.analyzePerformanceOnLines(fileContent, fileName, language, changedLines);
+      const securityIssues = this.analyzeSecurityOnLines(fileContent, fileName, language, changedLines);
+      
+      const allIssues = [...staticIssues, ...performanceIssues, ...securityIssues];
+      
+      const filteredIssues = allIssues.filter(issue => 
+        issue.severity === 'high' || issue.severity === 'medium'
+      );
+      
+      const finalIssues = filteredIssues.map(issue => ({
+        ...issue,
+        hash: this.generateIssueHash(issue),
+        id: this.generateIssueId(issue)
+      }));
+
+      console.log(`Found ${finalIssues.length} critical/warning issues in changed lines`);
+      
+      // Calculate performance score
+      const performanceScore = this.calculatePerformanceScore(allIssues);
+      
+      return {
+        issues: finalIssues,
+        metrics: { complexity: 1, maintainability: 90, performanceScore },
+        suggestions: finalIssues.length > 0 ? ['Review and fix the identified issues in your changes'] : [],
+      };
+    } catch (error) {
+      console.error('Changed lines analysis failed:', error);
+      return {
+        issues: [],
+        metrics: { complexity: 0, maintainability: 0, performanceScore: 0 },
+        suggestions: [],
+      };
+    }
+  }
+
+  // NEW: Performance analysis for specific lines
+  private analyzePerformanceOnLines(content: string, fileName: string, language: string, targetLines: number[]): CodeIssue[] {
+    const issues: CodeIssue[] = [];
+    const lines = content.split('\n');
+    const targetLineSet = new Set(targetLines);
+
+    lines.forEach((line, index) => {
+      const lineNumber = index + 1;
+      
+      if (!targetLineSet.has(lineNumber)) {
+        return;
+      }
+      
+      const trimmedLine = line.trim();
+      
+      if (!trimmedLine || trimmedLine.startsWith('//') || trimmedLine.startsWith('/*')) {
+        return;
+      }
+      
+      if (language === 'javascript' || language === 'typescript') {
+        // Inefficient loops
+        if (/for\s*\(\s*let\s+\w+\s*=\s*0.*\.length/.test(line)) {
+          const suggestedCode = line.replace(/for\s*\(\s*let\s+(\w+)\s*=\s*0;\s*\1\s*<\s*([^;]+)\.length;\s*\1\+\+\s*\)/, 
+            'for (let $1 = 0, len = $2.length; $1 < len; $1++)');
+          
+          issues.push({
+            type: 'warning',
+            severity: 'medium',
+            file: fileName,
+            line: lineNumber,
+            message: 'Inefficient loop: accessing .length property in each iteration',
+            rule: 'performance/loop-optimization',
+            category: 'performance',
+            suggestion: 'Cache array length to avoid repeated property access',
+            fixable: true,
+            originalCode: line,
+            suggestedCode,
+          });
+        }
+
+        // Inefficient DOM queries
+        if (line.includes('document.getElementById') || line.includes('document.querySelector')) {
+          if (lines.slice(Math.max(0, index - 5), index + 5).filter(l => 
+            l.includes('document.getElementById') || l.includes('document.querySelector')).length > 1) {
+            
+            issues.push({
+              type: 'warning',
+              severity: 'medium',
+              file: fileName,
+              line: lineNumber,
+              message: 'Multiple DOM queries detected - consider caching DOM elements',
+              rule: 'performance/dom-caching',
+              category: 'performance',
+              suggestion: 'Cache DOM elements in variables to avoid repeated queries',
+              fixable: false,
+              originalCode: line,
+            });
+          }
+        }
+
+        // Inefficient array methods
+        if (line.includes('.forEach(') && line.includes('push(')) {
+          const suggestedCode = line.replace(/\.forEach\(/, '.map(');
+          
+          issues.push({
+            type: 'warning',
+            severity: 'medium',
+            file: fileName,
+            line: lineNumber,
+            message: 'Consider using .map() instead of .forEach() with push()',
+            rule: 'performance/prefer-map',
+            category: 'performance',
+            suggestion: 'Use .map() for transforming arrays instead of forEach with push',
+            fixable: true,
+            originalCode: line,
+            suggestedCode,
+          });
+        }
+
+        // Large object creation in loops
+        if ((line.includes('for ') || line.includes('while ')) && 
+            (line.includes('new ') || line.includes('{}') || line.includes('[]'))) {
+          
+          issues.push({
+            type: 'warning',
+            severity: 'high',
+            file: fileName,
+            line: lineNumber,
+            message: 'Object creation inside loop can cause performance issues',
+            rule: 'performance/no-object-creation-in-loop',
+            category: 'performance',
+            suggestion: 'Move object creation outside the loop or use object pooling',
+            fixable: false,
+            originalCode: line,
+          });
+        }
+
+        // Synchronous operations that could be async
+        if (line.includes('JSON.parse') && line.includes('localStorage.getItem')) {
+          issues.push({
+            type: 'warning',
+            severity: 'medium',
+            file: fileName,
+            line: lineNumber,
+            message: 'Large JSON parsing can block the main thread',
+            rule: 'performance/async-json-parse',
+            category: 'performance',
+            suggestion: 'Consider using Web Workers for large JSON parsing operations',
+            fixable: false,
+            originalCode: line,
+          });
+        }
+      }
+    });
+
+    return issues;
+  }
+
+  // NEW: Enhanced security analysis for specific lines
+  private analyzeSecurityOnLines(content: string, fileName: string, language: string, targetLines: number[]): CodeIssue[] {
+    const issues: CodeIssue[] = [];
+    const lines = content.split('\n');
+    const targetLineSet = new Set(targetLines);
+
+    lines.forEach((line, index) => {
+      const lineNumber = index + 1;
+      
+      if (!targetLineSet.has(lineNumber)) {
+        return;
+      }
+      
+      const trimmedLine = line.trim();
+      
+      if (!trimmedLine || trimmedLine.startsWith('//') || trimmedLine.startsWith('/*')) {
+        return;
+      }
+      
+      if (language === 'javascript' || language === 'typescript') {
+        // SQL Injection vulnerabilities
+        if (line.includes('query') && line.includes('+') && (line.includes('SELECT') || line.includes('INSERT') || line.includes('UPDATE'))) {
+          issues.push({
+            type: 'error',
+            severity: 'high',
+            file: fileName,
+            line: lineNumber,
+            message: 'Potential SQL injection vulnerability - avoid string concatenation in SQL queries',
+            rule: 'security/no-sql-injection',
+            category: 'security',
+            suggestion: 'Use parameterized queries or prepared statements',
+            fixable: false,
+            originalCode: line,
+          });
+        }
+
+        // XSS vulnerabilities
+        if (line.includes('innerHTML') && (line.includes('+') || line.includes('${') || line.includes('req.') || line.includes('input'))) {
+          const suggestedCode = line.replace(/\.innerHTML\s*=/, '.textContent =');
+          
+          issues.push({
+            type: 'error',
+            severity: 'high',
+            file: fileName,
+            line: lineNumber,
+            message: 'Potential XSS vulnerability - avoid setting innerHTML with user input',
+            rule: 'security/no-xss',
+            category: 'security',
+            suggestion: 'Use textContent or sanitize HTML content with DOMPurify',
+            fixable: true,
+            originalCode: line,
+            suggestedCode,
+          });
+        }
+
+        // Insecure random number generation
+        if (line.includes('Math.random()') && (line.includes('password') || line.includes('token') || line.includes('secret'))) {
+          issues.push({
+            type: 'error',
+            severity: 'high',
+            file: fileName,
+            line: lineNumber,
+            message: 'Insecure random number generation for security-sensitive operations',
+            rule: 'security/secure-random',
+            category: 'security',
+            suggestion: 'Use crypto.getRandomValues() for cryptographically secure random numbers',
+            fixable: false,
+            originalCode: line,
+          });
+        }
+
+        // Hardcoded secrets
+        const secretPatterns = [
+          /api[_-]?key\s*[:=]\s*['"][^'"]+['"]/i,
+          /password\s*[:=]\s*['"][^'"]+['"]/i,
+          /secret\s*[:=]\s*['"][^'"]+['"]/i,
+          /token\s*[:=]\s*['"][^'"]+['"]/i,
+        ];
+
+        secretPatterns.forEach(pattern => {
+          if (pattern.test(line)) {
+            issues.push({
+              type: 'error',
+              severity: 'high',
+              file: fileName,
+              line: lineNumber,
+              message: 'Hardcoded secret detected - move to environment variables',
+              rule: 'security/no-hardcoded-secrets',
+              category: 'security',
+              suggestion: 'Use environment variables or secure configuration management',
+              fixable: false,
+              originalCode: line,
+            });
+          }
+        });
+
+        // Unsafe eval-like functions
+        if (line.includes('Function(') || line.includes('setTimeout(') && line.includes('"')) {
+          issues.push({
+            type: 'error',
+            severity: 'high',
+            file: fileName,
+            line: lineNumber,
+            message: 'Unsafe code execution - avoid Function constructor and string-based setTimeout',
+            rule: 'security/no-unsafe-eval',
+            category: 'security',
+            suggestion: 'Use proper function references instead of string-based code execution',
+            fixable: false,
+            originalCode: line,
+          });
+        }
+
+        // Insecure HTTP requests
+        if (line.includes('http://') && !line.includes('localhost') && !line.includes('127.0.0.1')) {
+          const suggestedCode = line.replace(/http:\/\//g, 'https://');
+          
+          issues.push({
+            type: 'warning',
+            severity: 'medium',
+            file: fileName,
+            line: lineNumber,
+            message: 'Insecure HTTP connection - use HTTPS for external requests',
+            rule: 'security/enforce-https',
+            category: 'security',
+            suggestion: 'Use HTTPS to encrypt data in transit',
+            fixable: true,
+            originalCode: line,
+            suggestedCode,
+          });
+        }
+      }
+    });
+
+    return issues;
+  }
+
+  // NEW: Calculate performance score based on issues
+  private calculatePerformanceScore(issues: CodeIssue[]): number {
+    const performanceIssues = issues.filter(issue => issue.category === 'performance');
+    const highSeverityCount = performanceIssues.filter(issue => issue.severity === 'high').length;
+    const mediumSeverityCount = performanceIssues.filter(issue => issue.severity === 'medium').length;
+    
+    // Start with 100 and deduct points for issues
+    let score = 100;
+    score -= highSeverityCount * 20; // High severity: -20 points each
+    score -= mediumSeverityCount * 10; // Medium severity: -10 points each
+    
+    return Math.max(0, score); // Ensure score doesn't go below 0
+  }
+
   async analyzeCode(fileContent: string, fileName: string, language: string): Promise<AnalysisResult> {
     try {
       const fileHash = this.generateFileHash(fileContent);
@@ -208,9 +523,10 @@ export class CodeAnalysisService {
         const filteredCached = cachedIssues.filter(issue => 
           issue.severity === 'high' || issue.severity === 'medium'
         );
+        const performanceScore = this.calculatePerformanceScore(cachedIssues);
         return {
           issues: filteredCached,
-          metrics: { complexity: 2, maintainability: 85 },
+          metrics: { complexity: 2, maintainability: 85, performanceScore },
           suggestions: ['Consider adding unit tests', 'Review code documentation'],
           fileHash,
           hasConflicts: conflictCheck.hasConflicts,
@@ -221,8 +537,10 @@ export class CodeAnalysisService {
       const staticIssues = this.performStaticAnalysis(fileContent, fileName, language);
       const prettierIssues = this.checkPrettierFormatting(fileContent, fileName, language);
       const lintingIssues = this.performLinting(fileContent, fileName, language);
+      const performanceIssues = this.analyzePerformance(fileContent, fileName, language);
+      const securityIssues = this.analyzeSecurity(fileContent, fileName, language);
       
-      const allIssues = [...staticIssues, ...prettierIssues, ...lintingIssues];
+      const allIssues = [...staticIssues, ...prettierIssues, ...lintingIssues, ...performanceIssues, ...securityIssues];
       const uniqueIssues = this.deduplicateIssues(allIssues);
       
       const filteredIssues = uniqueIssues.filter(issue => 
@@ -237,10 +555,12 @@ export class CodeAnalysisService {
 
       this.issueCache.set(fileHash, finalIssues);
       
+      const performanceScore = this.calculatePerformanceScore(allIssues);
+      
       return {
         issues: finalIssues,
-        metrics: { complexity: 3, maintainability: 80 },
-        suggestions: ['Apply prettier formatting', 'Fix linting issues', 'Review code quality'],
+        metrics: { complexity: 3, maintainability: 80, performanceScore },
+        suggestions: ['Apply prettier formatting', 'Fix linting issues', 'Review code quality', 'Optimize performance'],
         fileHash,
         hasConflicts: conflictCheck.hasConflicts,
         conflictDetails: conflictCheck.conflictDetails
@@ -249,11 +569,92 @@ export class CodeAnalysisService {
       console.error('Code analysis failed:', error);
       return {
         issues: [],
-        metrics: { complexity: 0, maintainability: 0 },
+        metrics: { complexity: 0, maintainability: 0, performanceScore: 0 },
         suggestions: [],
         hasConflicts: false
       };
     }
+  }
+
+  // NEW: Full performance analysis
+  private analyzePerformance(content: string, fileName: string, language: string): CodeIssue[] {
+    const issues: CodeIssue[] = [];
+    const lines = content.split('\n');
+
+    lines.forEach((line, index) => {
+      const lineNumber = index + 1;
+      const trimmedLine = line.trim();
+      
+      if (!trimmedLine || trimmedLine.startsWith('//') || trimmedLine.startsWith('/*')) {
+        return;
+      }
+      
+      if (language === 'javascript' || language === 'typescript') {
+        // All the performance checks from analyzePerformanceOnLines
+        if (/for\s*\(\s*let\s+\w+\s*=\s*0.*\.length/.test(line)) {
+          const suggestedCode = line.replace(/for\s*\(\s*let\s+(\w+)\s*=\s*0;\s*\1\s*<\s*([^;]+)\.length;\s*\1\+\+\s*\)/, 
+            'for (let $1 = 0, len = $2.length; $1 < len; $1++)');
+          
+          issues.push({
+            type: 'warning',
+            severity: 'medium',
+            file: fileName,
+            line: lineNumber,
+            message: 'Inefficient loop: accessing .length property in each iteration',
+            rule: 'performance/loop-optimization',
+            category: 'performance',
+            suggestion: 'Cache array length to avoid repeated property access',
+            fixable: true,
+            originalCode: line,
+            suggestedCode,
+          });
+        }
+
+        // Add more performance checks here...
+      }
+    });
+
+    return issues;
+  }
+
+  // NEW: Full security analysis
+  private analyzeSecurity(content: string, fileName: string, language: string): CodeIssue[] {
+    const issues: CodeIssue[] = [];
+    const lines = content.split('\n');
+
+    lines.forEach((line, index) => {
+      const lineNumber = index + 1;
+      const trimmedLine = line.trim();
+      
+      if (!trimmedLine || trimmedLine.startsWith('//') || trimmedLine.startsWith('/*')) {
+        return;
+      }
+      
+      if (language === 'javascript' || language === 'typescript') {
+        // All the security checks from analyzeSecurityOnLines
+        if (line.includes('innerHTML') && (line.includes('+') || line.includes('${') || line.includes('req.') || line.includes('input'))) {
+          const suggestedCode = line.replace(/\.innerHTML\s*=/, '.textContent =');
+          
+          issues.push({
+            type: 'error',
+            severity: 'high',
+            file: fileName,
+            line: lineNumber,
+            message: 'Potential XSS vulnerability - avoid setting innerHTML with user input',
+            rule: 'security/no-xss',
+            category: 'security',
+            suggestion: 'Use textContent or sanitize HTML content with DOMPurify',
+            fixable: true,
+            originalCode: line,
+            suggestedCode,
+          });
+        }
+
+        // Add more security checks here...
+      }
+    });
+
+    return issues;
   }
 
   private checkPrettierFormatting(content: string, fileName: string, language: string): CodeIssue[] {
@@ -450,6 +851,161 @@ export class CodeAnalysisService {
       });
     }
 
+    return issues;
+  }
+
+  private performStaticAnalysisOnLines(content: string, fileName: string, language: string, targetLines: number[]): CodeIssue[] {
+    const issues: CodeIssue[] = [];
+    const lines = content.split('\n');
+    const targetLineSet = new Set(targetLines);
+
+    lines.forEach((line, index) => {
+      const lineNumber = index + 1;
+      
+      if (!targetLineSet.has(lineNumber)) {
+        return;
+      }
+      
+      const trimmedLine = line.trim();
+      
+      if (!trimmedLine || trimmedLine.startsWith('//') || trimmedLine.startsWith('/*') || trimmedLine.startsWith('*')) {
+        return;
+      }
+      
+      if (language === 'javascript' || language === 'typescript') {
+        if (line.includes('console.log') && !line.includes('//')) {
+          const originalCode = line;
+          const suggestedCode = line.replace(/console\.log\([^)]*\);?/, '// TODO: Remove console.log for production');
+          
+          issues.push({
+            type: 'warning',
+            severity: 'medium',
+            file: fileName,
+            line: lineNumber,
+            message: 'Console.log statement should be removed for production',
+            rule: 'no-console',
+            category: 'best-practice',
+            suggestion: 'Remove console.log statements or use proper logging library',
+            fixable: true,
+            originalCode,
+            suggestedCode,
+          });
+        }
+
+        if (this.shouldHaveSemicolon(trimmedLine) && !trimmedLine.endsWith(';')) {
+          const suggestedCode = line + ';';
+          
+          issues.push({
+            type: 'error',
+            severity: 'high',
+            file: fileName,
+            line: lineNumber,
+            message: 'Missing semicolon',
+            rule: 'semi',
+            category: 'eslint',
+            suggestion: 'Add semicolon at end of statement',
+            fixable: true,
+            originalCode: line,
+            suggestedCode,
+          });
+        }
+
+        if (line.includes('==') && !line.includes('===') && !line.includes('!==')) {
+          const suggestedCode = line.replace(/([^=!])={2}([^=])/g, '$1===$2').replace(/!={2}([^=])/g, '!==$1');
+          
+          issues.push({
+            type: 'warning',
+            severity: 'high',
+            file: fileName,
+            line: lineNumber,
+            message: 'Use strict equality (===) instead of loose equality (==)',
+            rule: 'eqeqeq',
+            category: 'best-practice',
+            suggestion: 'Use === and !== for strict equality checks',
+            fixable: true,
+            originalCode: line,
+            suggestedCode,
+          });
+        }
+
+        if (line.includes('await ') && !this.hasErrorHandling(lines, index)) {
+          const indent = line.match(/^\s*/)?.[0] || '';
+          const suggestedCode = `${indent}try {\n${line}\n${indent}} catch (error) {\n${indent}  console.error('Error:', error);\n${indent}}`;
+          
+          issues.push({
+            type: 'warning',
+            severity: 'high',
+            file: fileName,
+            line: lineNumber,
+            message: 'Async operation without error handling',
+            rule: 'require-await-error-handling',
+            category: 'best-practice',
+            suggestion: 'Wrap await calls in try-catch blocks',
+            fixable: true,
+            originalCode: line,
+            suggestedCode,
+          });
+        }
+
+        const varMatch = trimmedLine.match(/^(let|const|var)\s+(\w+)/);
+        if (varMatch) {
+          const varName = varMatch[2];
+          const restOfFile = lines.slice(index + 1).join('\n');
+          if (!restOfFile.includes(varName) && varName !== '_') {
+            const suggestedCode = line.replace(varName, `_${varName}`);
+            
+            issues.push({
+              type: 'warning',
+              severity: 'medium',
+              file: fileName,
+              line: lineNumber,
+              message: `Variable '${varName}' is declared but never used`,
+              rule: 'no-unused-vars',
+              category: 'eslint',
+              suggestion: `Prefix with underscore to indicate intentional non-use`,
+              fixable: true,
+              originalCode: line,
+              suggestedCode,
+            });
+          }
+        }
+      }
+
+      if (line.includes('eval(')) {
+        issues.push({
+          type: 'error',
+          severity: 'high',
+          file: fileName,
+          line: lineNumber,
+          message: 'Use of eval() is dangerous and should be avoided',
+          rule: 'no-eval',
+          category: 'security',
+          suggestion: 'Replace eval() with safer alternatives like JSON.parse() or proper function calls',
+          fixable: false,
+          originalCode: line,
+        });
+      }
+
+      if (line.includes('innerHTML') && line.includes('=')) {
+        const suggestedCode = line.replace(/\.innerHTML\s*=/, '.textContent =');
+        
+        issues.push({
+          type: 'error',
+          severity: 'high',
+          file: fileName,
+          line: lineNumber,
+          message: 'Potential XSS vulnerability with innerHTML',
+          rule: 'no-inner-html',
+          category: 'security',
+          suggestion: 'Use textContent or sanitize HTML content before setting innerHTML',
+          fixable: true,
+          originalCode: line,
+          suggestedCode,
+        });
+      }
+    });
+
+    console.log(`Found ${issues.length} issues in ${targetLines.length} changed lines`);
     return issues;
   }
 
