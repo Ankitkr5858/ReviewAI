@@ -42,15 +42,24 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
 
     if (result.success) {
       setSubmitted(true);
+      
+      // Show success for 3 seconds, then close and reset
       setTimeout(() => {
         onClose();
-        // Reset form
-        setRating(0);
-        setTitle('');
-        setMessage('');
-        setCategory('general');
-        setSubmitted(false);
-      }, 2000);
+        // Reset form after closing
+        setTimeout(() => {
+          setRating(0);
+          setTitle('');
+          setMessage('');
+          setCategory('general');
+          setSubmitted(false);
+        }, 300);
+      }, 3000);
+      
+      // Trigger a custom event to notify other components about new feedback
+      window.dispatchEvent(new CustomEvent('feedbackSubmitted', { 
+        detail: result.feedback 
+      }));
     }
   };
 
@@ -86,9 +95,14 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
             <p className="text-gray-600 mb-4">
               Your feedback has been submitted successfully. We appreciate your input!
             </p>
-            <p className="text-sm text-gray-500">
-              We'll review your feedback and may reach out if we need more information.
-            </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">
+                <strong>Status:</strong> Your feedback is now <span className="font-semibold text-orange-600">pending review</span>
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                We'll review your feedback and may reach out if we need more information.
+              </p>
+            </div>
           </div>
         ) : (
           <>

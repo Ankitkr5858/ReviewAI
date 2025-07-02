@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Star, ThumbsUp, Clock, User, ChevronRight, Award, TrendingUp, Users, Target, ChevronLeft } from 'lucide-react';
 import { useFeedback } from '../hooks/useFeedback';
@@ -12,10 +12,30 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({ showInDashboard = fal
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const { feedbacks, getFeedbackStats, getPaginatedFeedbacks, markHelpful } = useFeedback();
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const stats = getFeedbackStats();
   const feedbacksPerPage = showInDashboard ? 3 : 5;
   const paginatedData = getPaginatedFeedbacks(currentPage, feedbacksPerPage);
+
+  // Listen for new feedback submissions for REAL-TIME updates
+  useEffect(() => {
+    const handleNewFeedback = () => {
+      setRefreshKey(prev => prev + 1);
+    };
+
+    const handleStorageChange = () => {
+      setRefreshKey(prev => prev + 1);
+    };
+
+    window.addEventListener('feedbackSubmitted', handleNewFeedback);
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('feedbackSubmitted', handleNewFeedback);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   const getTimeAgo = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -54,7 +74,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({ showInDashboard = fal
     // Compact version for dashboard
     return (
       <>
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-6" key={`dashboard-${refreshKey}`}>
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-gray-900">Community Feedback</h3>
             <motion.button
@@ -102,7 +122,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({ showInDashboard = fal
             ) : (
               paginatedData.feedbacks.map((feedback) => (
                 <motion.div
-                  key={feedback.id}
+                  key={`${feedback.id}-${refreshKey}`}
                   className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                   whileHover={{ 
                     scale: 1.01, 
@@ -162,7 +182,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({ showInDashboard = fal
   // PROFESSIONAL FULL VERSION FOR LANDING PAGE
   return (
     <>
-      <section className="py-24 bg-gradient-to-br from-gray-50 to-blue-50/30">
+      <section className="py-24 bg-gradient-to-br from-gray-50 to-blue-50/30" key={`landing-${refreshKey}`}>
         <div className="max-w-7xl mx-auto px-6">
           {/* PROFESSIONAL HEADER */}
           <div className="text-center mb-20">
@@ -270,7 +290,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({ showInDashboard = fal
               <>
                 {paginatedData.feedbacks.map((feedback, index) => (
                   <motion.div
-                    key={feedback.id}
+                    key={`${feedback.id}-${refreshKey}`}
                     className="bg-white border border-gray-200 rounded-2xl p-8 transition-all"
                     initial={{ opacity: 0, y: 30 }}
                     animate={{ opacity: 1, y: 0 }}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, Wand2, User, LogOut, Settings, ChevronDown } from 'lucide-react';
+import { Menu, Wand2, User, LogOut, Settings, ChevronDown, Home, GitBranch, Play, BarChart3 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useGitHubIntegration } from '../hooks/useGitHubIntegration';
 
 interface HeaderProps {
@@ -11,6 +11,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { disconnect } = useGitHubIntegration();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [userInfo, setUserInfo] = useState({
@@ -66,11 +67,26 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
       .slice(0, 2);
   };
 
+  // Navigation items with proper routing
+  const navigationItems = [
+    { path: '/', label: 'Dashboard', icon: Home },
+    { path: '/repositories', label: 'Repositories', icon: GitBranch },
+    { path: '/test', label: 'Test Review', icon: Play },
+    { path: '/admin', label: 'Admin Panel', icon: BarChart3 },
+  ];
+
+  const isActivePath = (path: string) => {
+    if (path === '/') {
+      return location.pathname === '/';
+    }
+    return location.pathname.startsWith(path);
+  };
+
   return (
     <header className="border-b border-gray-100 bg-white/95 backdrop-blur-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-8">
             <button
               onClick={onMenuClick}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors lg:hidden cursor-pointer"
@@ -92,6 +108,27 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
                 <p className="text-xs text-gray-500">Automated Code Review</p>
               </div>
             </motion.button>
+
+            {/* Navigation Menu */}
+            <nav className="hidden md:flex items-center gap-1">
+              {navigationItems.map((item) => (
+                <motion.button
+                  key={item.path}
+                  onClick={() => navigate(item.path)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                    isActivePath(item.path)
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ duration: 0.1 }}
+                >
+                  <item.icon size={16} />
+                  <span className="font-medium">{item.label}</span>
+                </motion.button>
+              ))}
+            </nav>
           </div>
 
           <div className="flex items-center gap-4">
@@ -170,6 +207,33 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
 
                       {/* Menu Items */}
                       <div className="p-2">
+                        {/* Quick Navigation */}
+                        {navigationItems.map((item) => (
+                          <motion.button
+                            key={item.path}
+                            onClick={() => {
+                              navigate(item.path);
+                              setShowUserMenu(false);
+                            }}
+                            className={`w-full flex items-center gap-3 px-3 py-2 text-left rounded-lg transition-colors ${
+                              isActivePath(item.path)
+                                ? 'bg-blue-50 text-blue-600'
+                                : 'hover:bg-gray-100 text-gray-700'
+                            }`}
+                            whileHover={{ 
+                              scale: 1.02, 
+                              boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)" 
+                            }}
+                            whileTap={{ scale: 0.98 }}
+                            transition={{ duration: 0.1 }}
+                          >
+                            <item.icon size={16} />
+                            <span>{item.label}</span>
+                          </motion.button>
+                        ))}
+
+                        <div className="border-t border-gray-200 my-2"></div>
+
                         <motion.button
                           onClick={() => {
                             navigate('/settings');

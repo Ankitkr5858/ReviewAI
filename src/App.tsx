@@ -9,6 +9,7 @@ import SubscriptionModal from './components/SubscriptionModal';
 import GitHubSetup from './components/GitHubSetup';
 import TestReview from './components/TestReview';
 import LandingPage from './components/LandingPage';
+import AdminRoute from './components/AdminRoute';
 import { useGitHubIntegration } from './hooks/useGitHubIntegration';
 
 function App() {
@@ -49,6 +50,7 @@ function App() {
               <Route path="/review/:id" element={<CodeReview />} />
               <Route path="/test" element={<TestReview />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/admin" element={<AdminRoute />} />
             </Routes>
           </motion.div>
         </main>

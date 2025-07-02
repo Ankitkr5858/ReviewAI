@@ -27,20 +27,41 @@ export const useFeedback = () => {
 
   // Load feedbacks from localStorage
   useEffect(() => {
-    const savedFeedbacks = localStorage.getItem('user_feedbacks');
-    if (savedFeedbacks) {
-      try {
-        setFeedbacks(JSON.parse(savedFeedbacks));
-      } catch (error) {
-        console.error('Failed to load feedbacks:', error);
+    const loadFeedbacks = () => {
+      const savedFeedbacks = localStorage.getItem('user_feedbacks');
+      if (savedFeedbacks) {
+        try {
+          const parsed = JSON.parse(savedFeedbacks);
+          setFeedbacks(parsed);
+        } catch (error) {
+          console.error('Failed to load feedbacks:', error);
+        }
       }
-    }
+    };
+
+    loadFeedbacks();
+
+    // Listen for storage changes (when feedback is added from another tab/component)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'user_feedbacks') {
+        loadFeedbacks();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   // Save feedbacks to localStorage
   const saveFeedbacks = (newFeedbacks: Feedback[]) => {
     localStorage.setItem('user_feedbacks', JSON.stringify(newFeedbacks));
     setFeedbacks(newFeedbacks);
+    
+    // Trigger storage event for real-time updates across components
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'user_feedbacks',
+      newValue: JSON.stringify(newFeedbacks)
+    }));
   };
 
   // Submit new feedback
@@ -94,7 +115,7 @@ export const useFeedback = () => {
         title: feedbackData.title,
         message: feedbackData.message,
         category: feedbackData.category,
-        status: 'reviewed', // FIXED: Default to 'reviewed' instead of 'pending'
+        status: 'pending', // Always start as pending for admin review
         timestamp: new Date().toISOString(),
         helpful: 0,
       };
@@ -102,37 +123,8 @@ export const useFeedback = () => {
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // FIXED: Update state immediately for real-time display
       const updatedFeedbacks = [newFeedback, ...feedbacks];
       saveFeedbacks(updatedFeedbacks);
-
-      // Simulate admin response for demo purposes (30% chance)
-      if (Math.random() < 0.3) {
-        setTimeout(() => {
-          const responseMessages = [
-            "Thank you for your feedback! We're looking into this.",
-            "Great suggestion! We've added this to our roadmap.",
-            "Thanks for reporting this. We'll fix it in the next update.",
-            "We appreciate your input and will consider this for future releases.",
-            "Excellent feedback! This aligns with our development goals.",
-          ];
-
-          const updatedFeedback = {
-            ...newFeedback,
-            status: 'implemented' as const, // Some get implemented status
-            response: {
-              message: responseMessages[Math.floor(Math.random() * responseMessages.length)],
-              timestamp: new Date().toISOString(),
-              responder: 'ReviewAI Team',
-            },
-          };
-
-          const feedbacksWithResponse = updatedFeedbacks.map(f => 
-            f.id === newFeedback.id ? updatedFeedback : f
-          );
-          saveFeedbacks(feedbacksWithResponse);
-        }, 2000); // Faster response for demo
-      }
 
       return { success: true, feedback: newFeedback };
     } catch (error) {
@@ -142,6 +134,40 @@ export const useFeedback = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Update feedback status (Admin function)
+  const updateFeedbackStatus = async (feedbackId: string, newStatus: Feedback['status']) => {
+    const updatedFeedbacks = feedbacks.map(feedback => 
+      feedback.id === feedbackId 
+        ? { ...feedback, status: newStatus }
+        : feedback
+    );
+    saveFeedbacks(updatedFeedbacks);
+  };
+
+  // Respond to feedback (Admin function)
+  const respondToFeedback = async (feedbackId: string, responseMessage: string) => {
+    const updatedFeedbacks = feedbacks.map(feedback => 
+      feedback.id === feedbackId 
+        ? { 
+            ...feedback, 
+            status: 'reviewed' as const,
+            response: {
+              message: responseMessage,
+              timestamp: new Date().toISOString(),
+              responder: 'ReviewAI Team',
+            }
+          }
+        : feedback
+    );
+    saveFeedbacks(updatedFeedbacks);
+  };
+
+  // Delete feedback (Admin function)
+  const deleteFeedback = async (feedbackId: string) => {
+    const updatedFeedbacks = feedbacks.filter(feedback => feedback.id !== feedbackId);
+    saveFeedbacks(updatedFeedbacks);
   };
 
   // Mark feedback as helpful
@@ -179,14 +205,14 @@ export const useFeedback = () => {
     };
   };
 
-  // Get recent feedbacks with pagination support
+  // Get recent feedbacks
   const getRecentFeedbacks = (limit = 5) => {
     return feedbacks
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, limit);
   };
 
-  // FIXED: Get paginated feedbacks
+  // Get paginated feedbacks
   const getPaginatedFeedbacks = (page = 1, limit = 5) => {
     const sortedFeedbacks = feedbacks
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -209,9 +235,12 @@ export const useFeedback = () => {
     loading,
     error,
     submitFeedback,
+    updateFeedbackStatus, // Admin function
+    respondToFeedback,    // Admin function
+    deleteFeedback,       // NEW: Admin function to delete feedback
     markHelpful,
     getFeedbackStats,
     getRecentFeedbacks,
-    getPaginatedFeedbacks, // ADDED: Pagination support
+    getPaginatedFeedbacks,
   };
 };
