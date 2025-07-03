@@ -23,6 +23,7 @@ import {
   GitMerge,
   Menu
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import FeedbackSection from './FeedbackSection';
 
 interface LandingPageProps {
@@ -30,10 +31,20 @@ interface LandingPageProps {
 }
 
 const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
+  const navigate = useNavigate();
   const [hoveredFeature, setHoveredFeature] = useState<number | null>(null);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual');
   const [currentSlide, setCurrentSlide] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // FIXED: Add navigation functions
+  const handleGetStarted = () => {
+    navigate('/dashboard');
+  };
+
+  const handleStartFreeReview = () => {
+    navigate('/dashboard');
+  };
 
   const features = [
     {
@@ -586,7 +597,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   e.preventDefault();
                   scrollToSection('features');
                 }}
-                className="text-gray-600 hover:text-gray-900 transition-colors"
+                className="text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
               >
                 Features
               </a>
@@ -596,7 +607,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   e.preventDefault();
                   scrollToSection('compare');
                 }}
-                className="text-gray-600 hover:text-gray-900 transition-colors"
+                className="text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
               >
                 Compare
               </a>
@@ -606,7 +617,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   e.preventDefault();
                   scrollToSection('reviews');
                 }}
-                className="text-gray-600 hover:text-gray-900 transition-colors"
+                className="text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
               >
                 Reviews
               </a>
@@ -616,13 +627,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   e.preventDefault();
                   scrollToSection('feedback');
                 }}
-                className="text-gray-600 hover:text-gray-900 transition-colors"
+                className="text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
               >
                 Feedback
               </a>
               <motion.button
-                onClick={onGetStarted}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-all font-medium shadow-xl"
+                onClick={handleGetStarted}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-all font-medium shadow-xl cursor-pointer"
                 whileHover={{ 
                   scale: 1.05, 
                   y: -1, 
@@ -661,7 +672,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   scrollToSection('features');
                   setMobileMenuOpen(false);
                 }}
-                className="block py-2 text-gray-600 hover:text-gray-900 transition-colors"
+                className="block py-2 text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
               >
                 Features
               </a>
@@ -672,7 +683,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   scrollToSection('compare');
                   setMobileMenuOpen(false);
                 }}
-                className="block py-2 text-gray-600 hover:text-gray-900 transition-colors"
+                className="block py-2 text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
               >
                 Compare
               </a>
@@ -683,7 +694,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   scrollToSection('reviews');
                   setMobileMenuOpen(false);
                 }}
-                className="block py-2 text-gray-600 hover:text-gray-900 transition-colors"
+                className="block py-2 text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
               >
                 Reviews
               </a>
@@ -694,16 +705,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   scrollToSection('feedback');
                   setMobileMenuOpen(false);
                 }}
-                className="block py-2 text-gray-600 hover:text-gray-900 transition-colors"
+                className="block py-2 text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
               >
                 Feedback
               </a>
               <motion.button
                 onClick={() => {
-                  onGetStarted();
+                  handleGetStarted();
                   setMobileMenuOpen(false);
                 }}
-                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-all font-medium"
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-all font-medium cursor-pointer"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.95 }}
               >
@@ -751,8 +762,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               className="flex flex-col sm:flex-row justify-center gap-4 mb-12"
             >
               <motion.button
-                onClick={onGetStarted}
-                className="flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-all text-lg font-medium shadow-xl"
+                onClick={handleStartFreeReview}
+                className="flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-all text-lg font-medium shadow-xl cursor-pointer"
                 whileHover={{ 
                   scale: 1.05, 
                   y: -2, 
@@ -890,7 +901,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               {/* NAVIGATION ARROWS */}
               <motion.button
                 onClick={prevSlide}
-                className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-white transition-all z-10"
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-white transition-all z-10 cursor-pointer"
                 whileHover={{ 
                   scale: 1.1, 
                   boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
@@ -903,7 +914,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
               <motion.button
                 onClick={nextSlide}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-white transition-all z-10"
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-white transition-all z-10 cursor-pointer"
                 whileHover={{ 
                   scale: 1.1, 
                   boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
@@ -920,7 +931,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   <motion.button
                     key={index}
                     onClick={() => setCurrentSlide(index)}
-                    className={`w-3 h-3 rounded-full transition-all ${
+                    className={`w-3 h-3 rounded-full transition-all cursor-pointer ${
                       index === currentSlide 
                         ? 'bg-gradient-to-r from-blue-600 to-purple-600' 
                         : 'bg-white/60 hover:bg-white/80'
@@ -1285,8 +1296,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             </p>
             
             <motion.button
-              onClick={onGetStarted}
-              className="inline-flex items-center gap-2 px-8 py-4 bg-white text-gray-900 rounded-full hover:bg-gray-100 transition-colors text-lg font-medium shadow-xl"
+              onClick={handleStartFreeReview}
+              className="inline-flex items-center gap-2 px-8 py-4 bg-white text-gray-900 rounded-full hover:bg-gray-100 transition-colors text-lg font-medium shadow-xl cursor-pointer"
               whileHover={{ 
                 scale: 1.05, 
                 y: -2, 
