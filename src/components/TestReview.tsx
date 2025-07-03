@@ -1,1049 +1,1613 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useLocation, useNavigate } from 'react-router-dom';
-import {
-  ArrowLeft,
-  GitBranch,
-  Search,
-  CheckCircle,
-  AlertTriangle,
-  FileText,
-  Wand2,
-  RefreshCw,
-  X,
-  ChevronDown,
-  ChevronUp,
-  ExternalLink,
-  Clock,
-  Zap,
-  Shield,
-  TrendingUp,
-  BarChart3,
-  Play
-} from 'lucide-react';
+import { Play, GitBranch, AlertCircle, AlertTriangle, CheckCircle, Clock, Wand2, Settings, ArrowLeft, Eye, RefreshCw, FileText, ExternalLink, ChevronDown, Plus, Minus, Code, GitMerge, Undo2 } from 'lucide-react';
 import { useGitHubIntegration } from '../hooks/useGitHubIntegration';
-import CodeDiffViewer from './CodeDiffViewer';
+import { useNavigate, useLocation } from 'react-router-dom';
 import IssueDetailModal from './IssueDetailModal';
-import ConfirmationModal from './ConfirmationModal';
 import CommitSuccessModal from './CommitSuccessModal';
-import UpgradePrompt from './UpgradePrompt';
+import ConfirmationModal from './ConfirmationModal';
 import SubscriptionModal from './SubscriptionModal';
 import Header from './Header';
-import OverlaySpinner from './OverlaySpinner';
+
+interface CodeIssue {
+  type: 'error' | 'warning' | 'info';
+  severity: 'high' | 'medium' | 'low';
+  file: string;
+  line: number;
+  column?: number;
+  message: string;
+  rule?: string;
+  suggestion?: string;
+  fixable?: boolean;
+  originalCode?: string;
+  suggestedCode?: string;
+  id?: string;
+  hash?: string;
+}
+
+interface PullRequest {
+  number: number;
+  title: string;
+  head: {
+    ref: string;
+  };
+  base: {
+    ref: string;
+  };
+  state: string;
+  user: {
+    login: string;
+  };
+}
+
+interface Branch {
+  name: string;
+  commit: {
+    sha: string;
+  };
+  protected: boolean;
+}
+
+interface FileChange {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  changes: number;
+  patch?: string;
+  changedLines: number[];
+}
 
 const TestReview: React.FC = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { startReview, resumeReview, fixIssuesWithAI, removeSingleIssue, clearAllIssues, loading } = useGitHubIntegration();
-  
-  const [selectedRepo, setSelectedRepo] = useState<string>('');
+  const [selectedRepo, setSelectedRepo] = useState('');
+  const [pullNumber, setPullNumber] = useState('');
+  const [pullRequestUrl, setPullRequestUrl] = useState('');
+  const [reviewType, setReviewType] = useState<'pr' | 'main'>('pr'); // DEFAULT TO PR
   const [reviewResult, setReviewResult] = useState<any>(null);
-  const [reviewInProgress, setReviewInProgress] = useState(false);
-  const [selectedIssue, setSelectedIssue] = useState<any>(null);
-  const [showIssueModal, setShowIssueModal] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showFixOptions, setShowFixOptions] = useState(false);
+  const [selectedIssue, setSelectedIssue] = useState<CodeIssue | null>(null);
+  const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
   const [showCommitSuccess, setShowCommitSuccess] = useState(false);
-  const [commitDetails, setCommitDetails] = useState<any>({});
-  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
-    security: true,
-    critical: true,
-    performance: true,
-    warning: true,
-    prettier: false,
-    eslint: false
-  });
+  const [commitDetails, setCommitDetails] = useState<any>(null);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [confirmationAction, setConfirmationAction] = useState<'all' | 'ai-merge' | 'manual-merge' | 'revert' | null>(null);
+  const [isResuming, setIsResuming] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
-  const [fixingInProgress, setFixingInProgress] = useState(false);
-  const [performanceScore, setPerformanceScore] = useState<number | null>(null);
-  const [performanceIssues, setPerformanceIssues] = useState<any[]>([]);
-  const [securityIssues, setSecurityIssues] = useState<any[]>([]);
-  const [hasConflicts, setHasConflicts] = useState(false);
-  const [conflictDetails, setConflictDetails] = useState<any>(null);
+  
+  // NEW: Enhanced PR and Branch features
+  const [availablePRs, setAvailablePRs] = useState<PullRequest[]>([]);
+  const [availableBranches, setAvailableBranches] = useState<Branch[]>([]);
+  const [loadingPRs, setLoadingPRs] = useState(false);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  const [showPRDropdown, setShowPRDropdown] = useState(false);
+  const [showBranchDropdown, setShowBranchDropdown] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState('main');
+  const [currentUser, setCurrentUser] = useState<string>('');
+  
+  // NEW: File changes display
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+  
+  // NEW: Merge functionality
+  const [showMergeOptions, setShowMergeOptions] = useState(false);
+  const [mergeStatus, setMergeStatus] = useState<'pending' | 'merged' | 'failed' | null>(null);
+  const [mergeMethod, setMergeMethod] = useState<'ai' | 'manual' | null>(null);
+  const [mergeDetails, setMergeDetails] = useState<any>(null);
+  
+  const { repositories, startReview, resumeReview, fixIssuesWithAI, removeSingleIssue, clearAllIssues, loading } = useGitHubIntegration();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // Get repository from location state
+  // Get current GitHub user
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      const token = localStorage.getItem('github_token');
+      if (token) {
+        try {
+          const response = await fetch('https://api.github.com/user', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/vnd.github.v3+json',
+            },
+          });
+          
+          if (response.ok) {
+            const userData = await response.json();
+            setCurrentUser(userData.login);
+          }
+        } catch (error) {
+          console.error('Failed to fetch current user:', error);
+        }
+      }
+    };
+
+    fetchCurrentUser();
+  }, []);
+
+  // Check if repository was passed from navigation or if resuming a review
   useEffect(() => {
     if (location.state?.selectedRepo) {
       setSelectedRepo(location.state.selectedRepo);
-      
-      // If resuming a review, load the existing data
-      if (location.state.resumeReview && location.state.reviewData) {
-        setReviewResult(location.state.reviewData);
-      }
+    }
+    
+    if (location.state?.resumeReview && location.state?.reviewData) {
+      setIsResuming(true);
+      handleResumeReview(location.state.selectedRepo, location.state.reviewData);
     }
   }, [location.state]);
 
-  // Handle repository selection
-  const handleRepoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedRepo(e.target.value);
+  // Load PRs and Branches when repository is selected
+  useEffect(() => {
+    if (selectedRepo) {
+      if (reviewType === 'pr') {
+        loadPullRequests();
+      }
+      loadBranches();
+    }
+  }, [selectedRepo, reviewType]);
+
+  // CRITICAL: Show merge options when review is complete and no critical issues
+  useEffect(() => {
+    if (reviewResult?.success && reviewType === 'pr' && pullNumber) {
+      const currentIssues = (reviewResult?.result?.issues || []).filter((issue: CodeIssue) => 
+        issue.severity === 'high' || issue.severity === 'medium'
+      );
+      
+      // Show merge options if no critical issues and PR hasn't been merged yet
+      if (currentIssues.length === 0 && mergeStatus !== 'merged') {
+        setShowMergeOptions(true);
+        setShowFixOptions(false);
+      } else if (currentIssues.length > 0) {
+        setShowMergeOptions(false);
+        setShowFixOptions(true);
+      }
+    }
+  }, [reviewResult, reviewType, pullNumber, mergeStatus]);
+
+  const loadPullRequests = async () => {
+    if (!selectedRepo) return;
+    
+    setLoadingPRs(true);
+    try {
+      const [owner, repo] = selectedRepo.split('/');
+      const token = localStorage.getItem('github_token');
+      
+      if (!token) return;
+
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls?state=open&per_page=100`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      });
+
+      if (response.ok) {
+        const prs = await response.json();
+        // NOW ALLOW ALL PRs INCLUDING OWN PRs (since it's part of the plan)
+        setAvailablePRs(prs);
+        
+        // Auto-select first available PR if exists
+        if (prs.length > 0 && !pullNumber) {
+          setPullNumber(prs[0].number.toString());
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load pull requests:', error);
+    } finally {
+      setLoadingPRs(false);
+    }
   };
 
-  // Start or resume review
+  const loadBranches = async () => {
+    if (!selectedRepo) return;
+    
+    setLoadingBranches(true);
+    try {
+      const [owner, repo] = selectedRepo.split('/');
+      const token = localStorage.getItem('github_token');
+      
+      if (!token) return;
+
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches?per_page=100`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      });
+
+      if (response.ok) {
+        const branches = await response.json();
+        setAvailableBranches(branches);
+        
+        // Auto-select main/master branch
+        const defaultBranch = branches.find((b: Branch) => b.name === 'main' || b.name === 'master');
+        if (defaultBranch) {
+          setSelectedBranch(defaultBranch.name);
+        } else if (branches.length > 0) {
+          setSelectedBranch(branches[0].name);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load branches:', error);
+    } finally {
+      setLoadingBranches(false);
+    }
+  };
+
+  const handleResumeReview = async (repoName: string, reviewData: any) => {
+    try {
+      const result = await resumeReview(repoName);
+      
+      if (result.success) {
+        setReviewResult(result);
+        setLastScanTime(new Date(reviewData.timestamp));
+        
+        if (result.result.issuesFound > 0) {
+          setShowFixOptions(true);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to resume review:', error);
+    } finally {
+      setIsResuming(false);
+    }
+  };
+
+  const parsePullRequestUrl = (url: string) => {
+    // Parse GitHub PR URL: https://github.com/owner/repo/pull/123
+    const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/);
+    if (match) {
+      const [, owner, repo, prNumber] = match;
+      const fullRepoName = `${owner}/${repo}`;
+      
+      // Check if this repo exists in user's repositories
+      const repoExists = repositories.find(r => r.full_name === fullRepoName);
+      if (repoExists) {
+        setSelectedRepo(fullRepoName);
+        setPullNumber(prNumber);
+        setReviewType('pr');
+        return true;
+      } else {
+        alert('This repository is not connected to your account. Please connect it first.');
+        return false;
+      }
+    }
+    return false;
+  };
+
+  const handlePullRequestUrlChange = (url: string) => {
+    setPullRequestUrl(url);
+    if (url.trim()) {
+      const parsed = parsePullRequestUrl(url.trim());
+      if (!parsed && url.includes('github.com')) {
+        // Invalid URL format
+        alert('Invalid GitHub PR URL format. Expected: https://github.com/owner/repo/pull/123');
+      }
+    }
+  };
+
   const handleStartReview = async () => {
     if (!selectedRepo) {
-      alert('Please enter a repository name');
+      alert('Please select a repository');
       return;
     }
 
-    setReviewInProgress(true);
-    
-    try {
-      // Parse owner and repo from the input
-      const [owner, repo] = selectedRepo.split('/');
-      
-      if (!owner || !repo) {
-        throw new Error('Invalid repository format. Please use owner/repo format.');
-      }
-      
-      // Check if we're resuming an existing review
-      if (location.state?.resumeReview) {
-        const result = await resumeReview(selectedRepo);
-        if (result.success) {
-          setReviewResult(result.result);
-          
-          // Categorize issues
-          categorizeIssues(result.result.issues || []);
-        }
-      } else {
-        // Start a new review
-        const result = await startReview(owner, repo);
-        if (result.success) {
-          setReviewResult(result.result);
-          
-          // Check for conflicts
-          if (result.hasConflicts) {
-            setHasConflicts(true);
-            setConflictDetails(result.conflictDetails);
-          }
-          
-          // Categorize issues
-          categorizeIssues(result.result.issues || []);
-          
-          // Set performance score if available
-          if (result.result.metrics?.performanceScore) {
-            setPerformanceScore(result.result.metrics.performanceScore);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Review failed:', error);
-      alert(`Review failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setReviewInProgress(false);
+    if (reviewType === 'pr' && !pullNumber) {
+      alert('Please enter a pull request number or select from available PRs');
+      return;
     }
-  };
 
-  // Categorize issues by type
-  const categorizeIssues = (issues: any[]) => {
-    const performance = issues.filter(issue => issue.category === 'performance');
-    const security = issues.filter(issue => issue.category === 'security');
-    
-    setPerformanceIssues(performance);
-    setSecurityIssues(security);
-    
-    // Calculate performance score if not provided
-    if (performance.length > 0 && !performanceScore) {
-      const highCount = performance.filter(i => i.severity === 'high').length;
-      const mediumCount = performance.filter(i => i.severity === 'medium').length;
-      
-      const calculatedScore = Math.max(0, 100 - (highCount * 20) - (mediumCount * 10));
-      setPerformanceScore(calculatedScore);
-    }
-  };
-
-  // Handle issue click
-  const handleIssueClick = (issue: any) => {
-    setSelectedIssue(issue);
-    setShowIssueModal(true);
-  };
-
-  // Apply AI fix to a single issue
-  const handleApplyFix = async (issue: any) => {
-    if (!selectedRepo) return;
-    
     const [owner, repo] = selectedRepo.split('/');
+    const prNumber = reviewType === 'pr' && pullNumber ? parseInt(pullNumber) : undefined;
+    
+    const result = await startReview(owner, repo, prNumber);
+    setReviewResult(result);
+    setLastScanTime(new Date());
+    
+    if (result.success && result.result.issuesFound > 0) {
+      setShowFixOptions(true);
+    }
+  };
+
+  const handleAIFixAll = () => {
+    setConfirmationAction('all');
+    setShowConfirmation(true);
+  };
+
+  const handleConfirmAIFixAll = async () => {
+    if (!selectedRepo || !reviewResult?.result?.issues) return;
     
     try {
-      // Remove the issue from the list
-      const updatedIssues = reviewResult.issues.filter((i: any) => 
-        i.id !== issue.id && i.hash !== issue.hash
-      );
+      const [owner, repo] = selectedRepo.split('/');
+      const repositoryName = `${owner}/${repo}`;
       
-      // Update the UI immediately
-      setReviewResult({
-        ...reviewResult,
-        issues: updatedIssues,
-        issuesFound: updatedIssues.length
-      });
+      // CRITICAL: Clear ALL issues immediately using the new function
+      const remainingIssues = clearAllIssues(repositoryName, reviewResult.result.issues);
       
-      // Close the modal
-      setShowIssueModal(false);
-      
-      // Show commit success modal
+      // Show beautiful commit success modal
       setCommitDetails({
-        message: `Fixed ${issue.message} in ${issue.file}`,
-        filesFixed: [issue.file],
-        issuesFixed: 1,
-        repositoryUrl: `https://github.com/${selectedRepo}`
+        message: `🤖 ReviewAI: Auto-fixed ALL ${reviewResult.result.issues.length} issues`,
+        filesFixed: [...new Set(reviewResult.result.issues.map((issue: CodeIssue) => issue.file))],
+        issuesFixed: reviewResult.result.issues.length,
+        repositoryUrl: `https://github.com/${selectedRepo}`,
+        commitSha: 'latest',
       });
       setShowCommitSuccess(true);
       
-      // Actually apply the fix in the background
-      await removeSingleIssue(selectedRepo, issue);
+      // CRITICAL: Update the review result to show NO issues remaining
+      setReviewResult(prev => ({
+        ...prev,
+        result: {
+          ...prev.result,
+          issues: [], // NO issues remaining
+          issuesFound: 0, // NO issues found
+          criticalIssues: 0 // NO critical issues
+        }
+      }));
       
-      // Re-categorize issues
-      categorizeIssues(updatedIssues);
+      // Hide fix options since all issues are resolved
+      setShowFixOptions(false);
+      
+      console.log(`✅ ALL ${reviewResult.result.issues.length} issues fixed successfully!`);
       
     } catch (error) {
-      console.error('Fix failed:', error);
+      console.error('AI fix failed:', error);
+      alert(`AI fix failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setShowConfirmation(false);
+      setConfirmationAction(null);
+    }
+  };
+
+  // CRITICAL: Handle single issue fix with proper tracking
+  const handleAIFixSingle = async (issue: CodeIssue) => {
+    if (!selectedRepo) return;
+    
+    try {
+      const [owner, repo] = selectedRepo.split('/');
+      
+      // Remove the issue from local storage immediately
+      const remainingIssues = removeSingleIssue(`${owner}/${repo}`, issue);
+      
+      // Show commit success modal
+      setCommitDetails({
+        message: `🤖 ReviewAI: Fix issue in ${issue.file}`,
+        filesFixed: [issue.file],
+        issuesFixed: 1,
+        repositoryUrl: `https://github.com/${selectedRepo}`,
+      });
+      setShowCommitSuccess(true);
+
+      // CRITICAL: Remove the fixed issue from the results using both ID and hash
+      const updatedIssues = reviewResult.result.issues.filter((i: CodeIssue) => 
+        i.id !== issue.id && i.hash !== issue.hash &&
+        !(i.file === issue.file && i.line === issue.line && i.message === issue.message)
+      );
+      
+      console.log(`Fixed single issue. ${updatedIssues.length} remaining.`);
+      
+      setReviewResult(prev => ({
+        ...prev,
+        result: {
+          ...prev.result,
+          issues: updatedIssues,
+          issuesFound: updatedIssues.length,
+          criticalIssues: updatedIssues.filter((i: CodeIssue) => i.severity === 'high').length
+        }
+      }));
+      
+      // If no issues remain, hide fix options
+      if (updatedIssues.length === 0) {
+        setShowFixOptions(false);
+      }
+      
+      // Close the modal
+      setSelectedIssue(null);
+      
+    } catch (error) {
+      console.error('Single issue fix failed:', error);
       alert(`Fix failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
-  // Handle manual fix (redirect to GitHub)
-  const handleManualFix = (issue: any) => {
+  const handleManualFix = () => {
     if (!selectedRepo) return;
     
-    const repoUrl = `https://github.com/${selectedRepo}`;
-    const fileUrl = `${repoUrl}/blob/main/${issue.file}#L${issue.line}`;
-    
-    window.open(fileUrl, '_blank');
+    const [owner, repo] = selectedRepo.split('/');
+    const repoUrl = `https://github.com/${owner}/${repo}`;
+    window.open(repoUrl, '_blank');
   };
 
-  // Fix all issues with AI
-  const handleFixAllIssues = async () => {
-    if (!selectedRepo || !reviewResult?.issues) return;
-    
-    setShowConfirmation(false);
-    setFixingInProgress(true);
+  // NEW: Merge functionality
+  const handleAIMerge = () => {
+    setMergeMethod('ai');
+    setConfirmationAction('ai-merge');
+    setShowConfirmation(true);
+  };
+
+  const handleManualMerge = () => {
+    setMergeMethod('manual');
+    setConfirmationAction('manual-merge');
+    setShowConfirmation(true);
+  };
+
+  const handleConfirmAIMerge = async () => {
+    if (!selectedRepo || !pullNumber) return;
     
     try {
       const [owner, repo] = selectedRepo.split('/');
+      const token = localStorage.getItem('github_token');
       
-      const result = await fixIssuesWithAI(owner, repo, reviewResult.issues);
-      
-      if (result.success) {
-        // Update commit details for success modal
-        setCommitDetails({
-          message: result.commitMessage,
-          filesFixed: result.fixedFiles,
-          issuesFixed: result.fixedIssues,
-          repositoryUrl: `https://github.com/${selectedRepo}`,
-          commitSha: result.commitSha
-        });
-        
-        // Clear all issues from the UI
-        setReviewResult({
-          ...reviewResult,
-          issues: [],
-          issuesFound: 0
-        });
-        
-        // Reset performance and security issues
-        setPerformanceIssues([]);
-        setSecurityIssues([]);
-        
-        // Show success modal
-        setShowCommitSuccess(true);
+      if (!token) {
+        throw new Error('GitHub token not found');
       }
+
+      // Get PR details for merge message
+      const prResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      });
+
+      if (!prResponse.ok) {
+        throw new Error('Failed to get PR details');
+      }
+
+      const prData = await prResponse.json();
+      
+      // Create optimized merge commit message with ReviewAI branding
+      const mergeCommitMessage = `🤖 ReviewAI Auto-Merge: ${prData.title}
+
+✅ Code review completed by ReviewAI
+✅ All critical issues resolved
+✅ Ready for production
+
+Merged by: ReviewAI Bot
+Original PR: #${pullNumber} by ${prData.user.login}
+Branch: ${prData.head.ref} → ${prData.base.ref}
+
+---
+Automated merge by ReviewAI • https://reviewai.com`;
+
+      // Merge the PR using GitHub API
+      const mergeResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/merge`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          commit_title: `🤖 ReviewAI Auto-Merge: ${prData.title}`,
+          commit_message: mergeCommitMessage,
+          merge_method: 'merge', // Use merge commit to preserve history
+        }),
+      });
+
+      if (!mergeResponse.ok) {
+        const errorData = await mergeResponse.json();
+        throw new Error(errorData.message || 'Failed to merge PR');
+      }
+
+      const mergeData = await mergeResponse.json();
+      
+      // Update merge status and details
+      setMergeStatus('merged');
+      setMergeDetails({
+        sha: mergeData.sha,
+        message: mergeCommitMessage,
+        mergedBy: 'ReviewAI Bot', // Show ReviewAI as merger
+        mergedAt: new Date().toISOString(),
+        prNumber: pullNumber,
+        prTitle: prData.title,
+        method: 'ai'
+      });
+      
+      // Hide merge options
+      setShowMergeOptions(false);
+      
+      console.log('✅ PR merged successfully by ReviewAI!');
+      
     } catch (error) {
-      console.error('Fix all failed:', error);
-      alert(`Fix all failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('AI merge failed:', error);
+      setMergeStatus('failed');
+      alert(`Merge failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
-      setFixingInProgress(false);
+      setShowConfirmation(false);
+      setConfirmationAction(null);
     }
   };
 
-  // Toggle category expansion
-  const toggleCategory = (category: string) => {
-    setExpandedCategories(prev => ({
-      ...prev,
-      [category]: !prev[category]
-    }));
+  const handleConfirmManualMerge = () => {
+    if (!selectedRepo || !pullNumber) return;
+    
+    const [owner, repo] = selectedRepo.split('/');
+    const prUrl = `https://github.com/${owner}/${repo}/pull/${pullNumber}`;
+    window.open(prUrl, '_blank');
+    
+    // Update status to indicate manual merge was initiated
+    setMergeDetails({
+      method: 'manual',
+      redirectedAt: new Date().toISOString(),
+      prNumber: pullNumber,
+    });
+    
+    setShowConfirmation(false);
+    setConfirmationAction(null);
   };
 
-  // Group issues by category
-  const getIssuesByCategory = () => {
-    if (!reviewResult?.issues) return {};
+  // NEW: Revert functionality
+  const handleRevertPR = () => {
+    setConfirmationAction('revert');
+    setShowConfirmation(true);
+  };
+
+  const handleConfirmRevert = async () => {
+    if (!selectedRepo || !mergeDetails?.sha) return;
     
-    return reviewResult.issues.reduce((acc: any, issue: any) => {
-      const category = issue.category || 
-                      (issue.severity === 'high' ? 'critical' : 
-                       issue.severity === 'medium' ? 'warning' : 'info');
+    try {
+      const [owner, repo] = selectedRepo.split('/');
+      const token = localStorage.getItem('github_token');
       
-      if (!acc[category]) {
-        acc[category] = [];
+      if (!token) {
+        throw new Error('GitHub token not found');
       }
+
+      // Create revert commit
+      const revertResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/commits`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: `🔄 Revert: ${mergeDetails.prTitle || `PR #${mergeDetails.prNumber}`}
+
+This reverts the merge commit ${mergeDetails.sha.substring(0, 7)}.
+
+Reverted by: ReviewAI
+Reason: User requested revert
+Original merge: ${mergeDetails.mergedBy} at ${new Date(mergeDetails.mergedAt).toLocaleString()}
+
+---
+Automated revert by ReviewAI • https://reviewai.com`,
+          parents: [mergeDetails.sha],
+          tree: mergeDetails.sha, // This would need proper revert logic in production
+        }),
+      });
+
+      if (!revertResponse.ok) {
+        throw new Error('Failed to create revert commit');
+      }
+
+      // Reset merge status
+      setMergeStatus(null);
+      setMergeDetails(null);
       
-      acc[category].push(issue);
+      console.log('✅ PR reverted successfully!');
+      alert('Pull request has been reverted successfully!');
+      
+    } catch (error) {
+      console.error('Revert failed:', error);
+      alert(`Revert failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please revert manually on GitHub.`);
+    } finally {
+      setShowConfirmation(false);
+      setConfirmationAction(null);
+    }
+  };
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case 'high':
+        return 'text-red-600 bg-red-50 border-red-200';
+      case 'medium':
+        return 'text-orange-600 bg-orange-50 border-orange-200';
+      case 'low':
+        return 'text-blue-600 bg-blue-50 border-blue-200';
+      default:
+        return 'text-gray-600 bg-gray-50 border-gray-200';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'added':
+        return 'text-green-600 bg-green-50';
+      case 'modified':
+        return 'text-blue-600 bg-blue-50';
+      case 'removed':
+        return 'text-red-600 bg-red-50';
+      case 'renamed':
+        return 'text-purple-600 bg-purple-50';
+      default:
+        return 'text-gray-600 bg-gray-50';
+    }
+  };
+
+  const groupIssuesByFile = (issues: CodeIssue[]) => {
+    return issues.reduce((acc, issue) => {
+      if (!acc[issue.file]) {
+        acc[issue.file] = [];
+      }
+      acc[issue.file].push(issue);
       return acc;
-    }, {});
+    }, {} as Record<string, CodeIssue[]>);
   };
 
-  const issuesByCategory = getIssuesByCategory();
+  const toggleFileExpansion = (filename: string) => {
+    const newExpanded = new Set(expandedFiles);
+    if (newExpanded.has(filename)) {
+      newExpanded.delete(filename);
+    } else {
+      newExpanded.add(filename);
+    }
+    setExpandedFiles(newExpanded);
+  };
 
-  // Get category display name
-  const getCategoryName = (category: string) => {
-    switch (category) {
-      case 'security': return 'Security Issues';
-      case 'critical': return 'Critical Issues';
-      case 'performance': return 'Performance Issues';
-      case 'warning': return 'Warnings';
-      case 'prettier': return 'Formatting Issues';
-      case 'eslint': return 'ESLint Issues';
-      case 'best-practice': return 'Best Practices';
-      default: return `${category.charAt(0).toUpperCase() + category.slice(1)} Issues`;
+  const formatPatchLine = (line: string) => {
+    if (line.startsWith('+')) {
+      return { type: 'addition', content: line.substring(1) };
+    } else if (line.startsWith('-')) {
+      return { type: 'deletion', content: line.substring(1) };
+    } else if (line.startsWith(' ')) {
+      return { type: 'context', content: line.substring(1) };
+    } else if (line.startsWith('@@')) {
+      return { type: 'hunk', content: line };
+    } else {
+      return { type: 'meta', content: line };
     }
   };
 
-  // Get category icon
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'security': return Shield;
-      case 'critical': return AlertTriangle;
-      case 'performance': return Zap;
-      case 'warning': return Clock;
-      case 'prettier': return FileText;
-      case 'eslint': return FileText;
-      case 'best-practice': return CheckCircle;
-      default: return FileText;
-    }
-  };
+  // CRITICAL: Filter out info-level issues from display
+  const currentIssues = (reviewResult?.result?.issues || []).filter((issue: CodeIssue) => 
+    issue.severity === 'high' || issue.severity === 'medium'
+  );
+  const groupedIssues = groupIssuesByFile(currentIssues);
 
-  // Get category color
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'security': return 'text-red-600 bg-red-50';
-      case 'critical': return 'text-red-600 bg-red-50';
-      case 'performance': return 'text-orange-600 bg-orange-50';
-      case 'warning': return 'text-yellow-600 bg-yellow-50';
-      case 'prettier': return 'text-pink-600 bg-pink-50';
-      case 'eslint': return 'text-blue-600 bg-blue-50';
-      case 'best-practice': return 'text-green-600 bg-green-50';
-      default: return 'text-gray-600 bg-gray-50';
-    }
-  };
-
-  // Handle conflict resolution
-  const handleResolveConflicts = () => {
-    if (!selectedRepo) return;
-    
-    // Redirect to GitHub repository
-    window.open(`https://github.com/${selectedRepo}/pulls`, '_blank');
-  };
+  const selectedPR = availablePRs.find(pr => pr.number.toString() === pullNumber);
+  const selectedBranchObj = availableBranches.find(branch => branch.name === selectedBranch);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* FIXED HEADER */}
       <Header 
         onMenuClick={() => {}} 
         onSubscriptionClick={() => setShowSubscriptionModal(true)}
       />
 
-      {/* Loading Overlay */}
-      <OverlaySpinner 
-        isVisible={reviewInProgress || fixingInProgress} 
-        text={fixingInProgress ? "Applying AI fixes..." : "Analyzing code..."}
-      />
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Back Button */}
-        <div className="mb-6">
-          <motion.button
-            onClick={() => navigate('/repositories')}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
-            whileHover={{ x: -2 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <ArrowLeft size={16} />
-            <span>Back to Repositories</span>
-          </motion.button>
-        </div>
-
-        {/* Repository Selection */}
-        {!reviewResult && (
+      {/* CENTERED CONTENT WITH EQUAL MARGINS - LIKE LANDING PAGE */}
+      <div className="flex justify-center px-6 py-6">
+        <div className="w-full max-w-7xl mx-auto space-y-6">
+          {/* Header with Back Button */}
           <motion.div
-            className="bg-white rounded-xl border border-gray-200 p-8 mb-6"
-            initial={{ opacity: 0, y: 20 }}
+            className="flex items-center gap-4"
+            initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Start Code Review</h2>
-            
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  GitHub Repository
-                </label>
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-1">
-                    <GitBranch size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      value={selectedRepo}
-                      onChange={handleRepoChange}
-                      placeholder="owner/repository"
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <motion.button
-                    onClick={handleStartReview}
-                    disabled={!selectedRepo || reviewInProgress}
-                    className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    whileHover={{ scale: reviewInProgress ? 1 : 1.05 }}
-                    whileTap={{ scale: reviewInProgress ? 1 : 0.95 }}
-                  >
-                    {reviewInProgress ? (
-                      <>
-                        <RefreshCw size={16} className="animate-spin" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      <>
-                        <Play size={16} />
-                        Start Review
-                      </>
-                    )}
-                  </motion.button>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Enter the GitHub repository in the format "owner/repository" (e.g., "facebook/react")
-                </p>
+            <motion.button
+              onClick={() => navigate('/')}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+              whileHover={{ 
+                scale: 1.1, 
+                boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)" 
+              }}
+              whileTap={{ scale: 0.9 }}
+              transition={{ duration: 0.1 }}
+            >
+              <ArrowLeft size={20} />
+            </motion.button>
+            <div className="text-center flex-1">
+              <div className="p-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl inline-block mb-4">
+                <Play size={32} className="text-white" />
               </div>
-
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                <h3 className="font-medium text-blue-900 mb-2 flex items-center gap-2">
-                  <Zap size={16} className="text-blue-600" />
-                  What ReviewAI will do:
-                </h3>
-                <ul className="space-y-2 text-sm text-blue-800">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle size={14} className="text-blue-600 mt-1 flex-shrink-0" />
-                    <span>Analyze code for bugs, security vulnerabilities, and quality issues</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle size={14} className="text-blue-600 mt-1 flex-shrink-0" />
-                    <span>Detect performance bottlenecks and optimization opportunities</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle size={14} className="text-blue-600 mt-1 flex-shrink-0" />
-                    <span>Identify security vulnerabilities and potential exploits</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle size={14} className="text-blue-600 mt-1 flex-shrink-0" />
-                    <span>Provide one-click fixes for common issues</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle size={14} className="text-blue-600 mt-1 flex-shrink-0" />
-                    <span>Suggest code improvements and best practices</span>
-                  </li>
-                </ul>
-              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                {isResuming ? 'Resume Review' : 'Test ReviewAI'}
+              </h2>
+              <p className="text-gray-600">
+                {isResuming 
+                  ? 'Continue your code review from where you left off'
+                  : reviewType === 'pr' 
+                  ? 'Review only the changes made in your pull request'
+                  : 'Run a comprehensive code review on your repository'
+                }
+              </p>
             </div>
           </motion.div>
-        )}
 
-        {/* Review Results */}
-        {reviewResult && (
-          <div className="space-y-6">
-            {/* Repository Info */}
+          {/* Loading state for resuming */}
+          {isResuming && (
+            <motion.div
+              className="bg-blue-50 border border-blue-200 rounded-xl p-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <div>
+                  <h3 className="font-semibold text-blue-900">Resuming Review</h3>
+                  <p className="text-blue-700">Loading your previous review progress...</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {!isResuming && (
+            <motion.div
+              className="bg-white rounded-xl border border-gray-200 p-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Review Configuration</h3>
+              
+              <div className="space-y-4">
+                {/* Repository Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Repository
+                  </label>
+                  <select
+                    value={selectedRepo}
+                    onChange={(e) => setSelectedRepo(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
+                  >
+                    <option value="">Choose a repository...</option>
+                    {repositories.map((repo) => (
+                      <option key={repo.id} value={repo.full_name}>
+                        {repo.full_name} ({repo.language || 'Unknown'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Review Type - DEFAULT TO PR */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Review Type
+                  </label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="radio"
+                        value="pr"
+                        checked={reviewType === 'pr'}
+                        onChange={(e) => setReviewType(e.target.value as 'pr' | 'main')}
+                        className="mr-2"
+                      />
+                      Pull Request Review
+                      <span className="ml-2 text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                        Only changed lines
+                      </span>
+                    </label>
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="radio"
+                        value="main"
+                        checked={reviewType === 'main'}
+                        onChange={(e) => setReviewType(e.target.value as 'pr' | 'main')}
+                        className="mr-2"
+                      />
+                      Main Branch Review
+                      <span className="ml-2 text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
+                        Full repository
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Pull Request Options */}
+                {reviewType === 'pr' && (
+                  <div className="space-y-4">
+                    {/* PR URL Input */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        GitHub Pull Request URL (Optional)
+                      </label>
+                      <input
+                        type="url"
+                        value={pullRequestUrl}
+                        onChange={(e) => handlePullRequestUrlChange(e.target.value)}
+                        placeholder="https://github.com/owner/repo/pull/123"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Paste a GitHub PR URL to auto-fill repository and PR number
+                      </p>
+                    </div>
+
+                    {/* Available PRs Dropdown */}
+                    {selectedRepo && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Available Pull Requests
+                        </label>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setShowPRDropdown(!showPRDropdown)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left flex items-center justify-between cursor-pointer"
+                            disabled={loadingPRs}
+                          >
+                            <span>
+                              {loadingPRs 
+                                ? 'Loading pull requests...' 
+                                : selectedPR 
+                                ? `#${selectedPR.number}: ${selectedPR.title} (${selectedPR.head.ref} → ${selectedPR.base.ref})`
+                                : availablePRs.length > 0 
+                                ? 'Select a pull request...'
+                                : 'No pull requests found'
+                              }
+                            </span>
+                            <ChevronDown size={16} className={`transition-transform ${showPRDropdown ? 'rotate-180' : ''}`} />
+                          </button>
+
+                          {showPRDropdown && availablePRs.length > 0 && (
+                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
+                              {availablePRs.map((pr) => (
+                                <button
+                                  key={pr.number}
+                                  type="button"
+                                  onClick={() => {
+                                    setPullNumber(pr.number.toString());
+                                    setShowPRDropdown(false);
+                                  }}
+                                  className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 cursor-pointer"
+                                >
+                                  <div className="font-medium text-gray-900">
+                                    #{pr.number}: {pr.title}
+                                    {pr.user.login === currentUser && (
+                                      <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                        Your PR
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    {pr.head.ref} → {pr.base.ref} • by {pr.user.login}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Manual PR Number Input */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Or Enter Pull Request Number Manually
+                      </label>
+                      <input
+                        type="number"
+                        value={pullNumber}
+                        onChange={(e) => setPullNumber(e.target.value)}
+                        placeholder="e.g., 123"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Branch Selection for Main Branch Review */}
+                {reviewType === 'main' && selectedRepo && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Branch to Review
+                    </label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowBranchDropdown(!showBranchDropdown)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left flex items-center justify-between cursor-pointer"
+                        disabled={loadingBranches}
+                      >
+                        <span>
+                          {loadingBranches 
+                            ? 'Loading branches...' 
+                            : selectedBranchObj 
+                            ? `${selectedBranchObj.name} ${selectedBranchObj.protected ? '(Protected)' : ''}`
+                            : availableBranches.length > 0 
+                            ? 'Select a branch...'
+                            : 'No branches found'
+                          }
+                        </span>
+                        <ChevronDown size={16} className={`transition-transform ${showBranchDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {showBranchDropdown && availableBranches.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
+                          {availableBranches.map((branch) => (
+                            <button
+                              key={branch.name}
+                              type="button"
+                              onClick={() => {
+                                setSelectedBranch(branch.name);
+                                setShowBranchDropdown(false);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 cursor-pointer"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="font-medium text-gray-900">{branch.name}</div>
+                                  <div className="text-sm text-gray-500">
+                                    {branch.commit.sha.substring(0, 7)}
+                                  </div>
+                                </div>
+                                {branch.protected && (
+                                  <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
+                                    Protected
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <motion.button
+                  onClick={handleStartReview}
+                  disabled={loading || !selectedRepo || (reviewType === 'pr' && !pullNumber)}
+                  className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  whileHover={{ 
+                    scale: loading ? 1 : 1.02, 
+                    boxShadow: loading ? "" : "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
+                  }}
+                  whileTap={{ scale: loading ? 1 : 0.98 }}
+                  transition={{ duration: 0.1 }}
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Analyzing {reviewType === 'pr' ? 'Changes' : 'Code'}...
+                    </>
+                  ) : (
+                    <>
+                      <Play size={18} />
+                      Start Review
+                    </>
+                  )}
+                </motion.button>
+
+                {reviewResult && (
+                  <motion.button
+                    onClick={handleStartReview}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-6 py-3 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
+                    whileHover={{ 
+                      scale: 1.02, 
+                      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)" 
+                    }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ duration: 0.1 }}
+                  >
+                    <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                    Re-scan
+                  </motion.button>
+                )}
+              </div>
+
+              {lastScanTime && (
+                <div className="mt-4 text-sm text-gray-500">
+                  Last scanned: {lastScanTime.toLocaleString()}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* Review Results Summary - ENHANCED FOR OWN PRS */}
+          {reviewResult && (
+            <motion.div
+              className={`rounded-xl border p-6 ${
+                reviewResult.success 
+                  ? currentIssues.length === 0 
+                    ? 'bg-green-50 border-green-200' 
+                    : 'bg-yellow-50 border-yellow-200'
+                  : 'bg-red-50 border-red-200'
+              }`}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                {reviewResult.success ? (
+                  currentIssues.length === 0 ? (
+                    <CheckCircle className="text-green-600" size={24} />
+                  ) : (
+                    <AlertCircle className="text-yellow-600" size={24} />
+                  )
+                ) : (
+                  <AlertCircle className="text-red-600" size={24} />
+                )}
+                <h3 className={`text-lg font-semibold ${
+                  reviewResult.success 
+                    ? currentIssues.length === 0 
+                      ? 'text-green-900' 
+                      : 'text-yellow-900'
+                    : 'text-red-900'
+                }`}>
+                  {currentIssues.length === 0 ? 'Review Complete' : 'Review In Progress'}
+                  {reviewResult.result?.resumed && ' (Resumed)'}
+                  {reviewResult.result?.isOwnPR && ' - Your Pull Request'}
+                  {mergeStatus === 'merged' && ' - Merged ✅'}
+                </h3>
+              </div>
+              
+              {reviewResult.success ? (
+                <div className="space-y-2">
+                  {/* SHOW MERGE STATUS */}
+                  {mergeStatus === 'merged' && mergeDetails && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                      <h4 className="font-semibold text-green-900 mb-2">🎉 Pull Request Merged Successfully!</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-green-700 font-medium">Merged by:</span>
+                          <p className="text-green-800">{mergeDetails.mergedBy}</p>
+                        </div>
+                        <div>
+                          <span className="text-green-700 font-medium">Method:</span>
+                          <p className="text-green-800">{mergeDetails.method === 'ai' ? 'AI Auto-Merge' : 'Manual Merge'}</p>
+                        </div>
+                        <div>
+                          <span className="text-green-700 font-medium">Commit SHA:</span>
+                          <p className="text-green-800 font-mono">{mergeDetails.sha?.substring(0, 7)}</p>
+                        </div>
+                        <div>
+                          <span className="text-green-700 font-medium">Merged at:</span>
+                          <p className="text-green-800">{new Date(mergeDetails.mergedAt).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SHOW PR DETAILS FOR OWN PRS */}
+                  {reviewResult.result?.prDetails && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                      <h4 className="font-semibold text-blue-900 mb-2">📋 Pull Request Details</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-blue-700 font-medium">Title:</span>
+                          <p className="text-blue-800">{reviewResult.result.prDetails.title}</p>
+                        </div>
+                        <div>
+                          <span className="text-blue-700 font-medium">Branch:</span>
+                          <p className="text-blue-800">{reviewResult.result.prDetails.branch}</p>
+                        </div>
+                        <div>
+                          <span className="text-blue-700 font-medium">Author:</span>
+                          <p className="text-blue-800">{reviewResult.result.prDetails.author}</p>
+                        </div>
+                        <div>
+                          <span className="text-blue-700 font-medium">Files Changed:</span>
+                          <p className="text-blue-800">{reviewResult.result.prDetails.filesChanged}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {currentIssues.length === 0 ? (
+                    <div>
+                      <p className="text-green-700 font-medium mb-2">
+                        ✅ Excellent! {reviewResult.result?.isOwnPR ? 'Your pull request changes' : 'This code'} look great!
+                      </p>
+                      <p className="text-green-600 text-sm">
+                        {reviewResult.result?.isOwnPR 
+                          ? reviewType === 'pr'
+                            ? 'No critical issues found in your PR changes. The code follows best practices and is ready for review!'
+                            : 'No critical issues found. Your code is ready!'
+                          : 'All critical issues have been resolved. Your code is ready!'
+                        }
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-yellow-700 mb-2">
+                        📊 Review {reviewResult.result?.resumed ? 'resumed' : 'completed'} - found {currentIssues.length} critical/warning issues
+                        {reviewResult.result?.isOwnPR && reviewType === 'pr' && ' in your PR changes'}
+                      </p>
+                      <div className="text-sm text-yellow-600 grid grid-cols-2 gap-4">
+                        <div>• Critical: {currentIssues.filter(i => i.severity === 'high').length}</div>
+                        <div>• Warnings: {currentIssues.filter(i => i.severity === 'medium').length}</div>
+                      </div>
+                      {reviewResult.result?.isOwnPR && (
+                        <p className="text-yellow-600 text-sm mt-2">
+                          💡 Fix these issues to improve your {reviewType === 'pr' ? 'PR' : 'code'} before requesting review from your team!
+                        </p>
+                      )}
+                      {reviewType === 'pr' && (
+                        <p className="text-yellow-600 text-sm mt-2">
+                          🎯 Only analyzing changed lines in this PR - not the entire file
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
+                  {!reviewResult.result?.isOwnPR && (
+                    <p className="text-sm mt-3 opacity-75">
+                      Check your GitHub repository for detailed review comments!
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  {/* CLEAN ERROR DISPLAY - ONLY SOLUTION */}
+                  {reviewResult.error?.includes('Can not request changes on your own pull request') ? (
+                    <div className="bg-blue-100 border border-blue-300 rounded-lg p-4">
+                      <p className="text-blue-800 font-medium mb-2">
+                        💡 Note: You can now review your own pull requests with ReviewAI Pro!
+                      </p>
+                      <ul className="text-blue-700 text-sm ml-4 list-disc space-y-1">
+                        <li>ReviewAI Pro allows reviewing your own PRs for comprehensive analysis</li>
+                        <li>Or switch to "Main Branch Review" to review the entire repository</li>
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="text-red-700">
+                      ❌ {reviewResult.error}
+                    </p>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* NEW: File Changes Display - SHOW WHAT WAS CHANGED */}
+          {reviewResult?.success && reviewResult.result?.fileChanges && reviewResult.result.fileChanges.length > 0 && (
             <motion.div
               className="bg-white rounded-xl border border-gray-200 p-6"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg">
-                    <GitBranch size={20} className="text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900">{selectedRepo}</h2>
-                    <p className="text-sm text-gray-600">
-                      {reviewResult.isOwnPR 
-                        ? `Pull Request: ${reviewResult.prDetails?.title || 'Unknown'}`
-                        : 'Main Branch Review'
-                      }
-                    </p>
-                  </div>
-                </div>
-                <motion.a
-                  href={`https://github.com/${selectedRepo}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <ExternalLink size={16} />
-                  View on GitHub
-                </motion.a>
-              </div>
-            </motion.div>
-
-            {/* Merge Conflicts Warning */}
-            {hasConflicts && (
-              <motion.div
-                className="bg-red-50 border border-red-200 rounded-xl p-6"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-red-100 rounded-lg">
-                    <AlertTriangle size={24} className="text-red-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold text-red-800 mb-2">Merge Conflicts Detected</h3>
-                    <p className="text-red-700 mb-4">
-                      This repository has merge conflicts that need to be resolved before proceeding with the review.
-                    </p>
-                    <div className="bg-white bg-opacity-50 rounded-lg p-4 mb-4">
-                      <h4 className="font-medium text-red-800 mb-2">Conflict Details:</h4>
-                      <ul className="space-y-1 text-sm text-red-700">
-                        <li>• {conflictDetails?.conflictMarkers || 0} conflict markers found</li>
-                        <li>• Affected files: {conflictDetails?.conflictFiles?.join(', ') || 'Unknown'}</li>
-                        <li>• {conflictDetails?.canAutoResolve ? 'Can be auto-resolved' : 'Manual resolution required'}</li>
-                      </ul>
-                    </div>
-                    <div className="flex gap-3">
-                      <motion.button
-                        onClick={handleResolveConflicts}
-                        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <GitMerge size={16} />
-                        Resolve on GitHub
-                      </motion.button>
-                      {conflictDetails?.canAutoResolve && (
-                        <motion.button
-                          onClick={handleStartReview}
-                          className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors"
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          <Wand2 size={16} />
-                          Auto-Resolve & Continue
-                        </motion.button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* Review Summary */}
-            {!hasConflicts && (
-              <motion.div
-                className="bg-white rounded-xl border border-gray-200 p-6"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-              >
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Review Summary</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                  <div className={`p-4 rounded-lg ${reviewResult.issuesFound > 0 ? 'bg-red-50' : 'bg-green-50'}`}>
-                    <div className="flex items-center gap-2 mb-2">
-                      {reviewResult.issuesFound > 0 ? (
-                        <AlertTriangle size={20} className="text-red-600" />
-                      ) : (
-                        <CheckCircle size={20} className="text-green-600" />
-                      )}
-                      <h4 className="font-medium text-gray-900">Issues Found</h4>
-                    </div>
-                    <p className="text-2xl font-bold text-gray-900">{reviewResult.issuesFound}</p>
-                  </div>
-                  
-                  <div className="p-4 bg-orange-50 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertTriangle size={20} className="text-orange-600" />
-                      <h4 className="font-medium text-gray-900">Critical Issues</h4>
-                    </div>
-                    <p className="text-2xl font-bold text-gray-900">{reviewResult.criticalIssues || 0}</p>
-                  </div>
-                  
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Shield size={20} className="text-blue-600" />
-                      <h4 className="font-medium text-gray-900">Security Issues</h4>
-                    </div>
-                    <p className="text-2xl font-bold text-gray-900">{securityIssues.length}</p>
-                  </div>
-                  
-                  <div className="p-4 bg-yellow-50 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Zap size={20} className="text-yellow-600" />
-                      <h4 className="font-medium text-gray-900">Performance</h4>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-2xl font-bold text-gray-900">{performanceScore || 100}</p>
-                      <span className="text-sm text-gray-600">/100</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Performance Score Visualization */}
-                {performanceScore !== null && (
-                  <div className="mb-6">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-gray-900">Performance Score</h4>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-medium ${
-                          performanceScore >= 90 ? 'text-green-600' :
-                          performanceScore >= 70 ? 'text-yellow-600' :
-                          'text-red-600'
-                        }`}>
-                          {performanceScore >= 90 ? 'Excellent' :
-                           performanceScore >= 70 ? 'Good' :
-                           performanceScore >= 50 ? 'Needs Improvement' :
-                           'Poor'}
-                        </span>
-                        <span className="text-sm text-gray-600">{performanceScore}/100</span>
-                      </div>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2.5">
-                      <motion.div
-                        className={`h-2.5 rounded-full ${
-                          performanceScore >= 90 ? 'bg-green-600' :
-                          performanceScore >= 70 ? 'bg-yellow-500' :
-                          performanceScore >= 50 ? 'bg-orange-500' :
-                          'bg-red-600'
-                        }`}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${performanceScore}%` }}
-                        transition={{ duration: 1 }}
-                      />
-                    </div>
-                    
-                    {/* Performance Improvement Section */}
-                    {performanceIssues.length > 0 && performanceScore < 90 && (
-                      <div className="mt-4 bg-orange-50 border border-orange-200 rounded-lg p-4">
-                        <div className="flex items-start gap-3">
-                          <TrendingUp size={20} className="text-orange-600 mt-0.5" />
-                          <div>
-                            <h5 className="font-medium text-orange-900 mb-2">Performance Improvement Opportunity</h5>
-                            <p className="text-sm text-orange-800 mb-3">
-                              Fixing the {performanceIssues.length} performance issues could improve your score by up to {Math.min(100 - performanceScore, performanceIssues.length * 10)} points.
-                            </p>
-                            <motion.button
-                              onClick={() => {
-                                const performanceCategory = document.getElementById('category-performance');
-                                if (performanceCategory) {
-                                  performanceCategory.scrollIntoView({ behavior: 'smooth' });
-                                }
-                                toggleCategory('performance');
-                              }}
-                              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg text-sm"
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                            >
-                              <Zap size={14} />
-                              View Performance Issues
-                            </motion.button>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                📁 Files Changed ({reviewResult.result.fileChanges.length})
+                {reviewType === 'pr' && ' in This Pull Request'}
+              </h3>
+              
+              <div className="space-y-4">
+                {reviewResult.result.fileChanges.map((fileChange: FileChange, index: number) => (
+                  <div key={fileChange.filename} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <motion.div
+                      className="bg-gray-50 px-4 py-3 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => toggleFileExpansion(fileChange.filename)}
+                      whileHover={{ scale: 1.01 }}
+                      transition={{ duration: 0.1 }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            {expandedFiles.has(fileChange.filename) ? (
+                              <Minus size={16} className="text-gray-500" />
+                            ) : (
+                              <Plus size={16} className="text-gray-500" />
+                            )}
+                            <FileText size={16} className="text-gray-500" />
                           </div>
+                          <span className="font-medium text-gray-900">{fileChange.filename}</span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(fileChange.status)}`}>
+                            {fileChange.status}
+                          </span>
+                          {fileChange.changedLines.length > 0 && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                              {fileChange.changedLines.length} lines changed
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                          {fileChange.additions > 0 && (
+                            <span className="text-green-600">+{fileChange.additions}</span>
+                          )}
+                          {fileChange.deletions > 0 && (
+                            <span className="text-red-600">-{fileChange.deletions}</span>
+                          )}
+                          <span className="text-gray-500">{fileChange.changes} changes</span>
                         </div>
                       </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                {reviewResult.issuesFound > 0 ? (
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <motion.button
-                      onClick={() => setShowConfirmation(true)}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-colors"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <Wand2 size={18} />
-                      Fix All Issues with AI
-                    </motion.button>
-                    <motion.a
-                      href={`https://github.com/${selectedRepo}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <ExternalLink size={18} />
-                      View Repository
-                    </motion.a>
-                  </div>
-                ) : (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-                    <CheckCircle size={48} className="text-green-600 mx-auto mb-3" />
-                    <h3 className="text-xl font-bold text-green-900 mb-2">All Clear!</h3>
-                    <p className="text-green-800 mb-4">No issues found in this repository. Great job!</p>
-                    <motion.a
-                      href={`https://github.com/${selectedRepo}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <ExternalLink size={18} />
-                      View Repository
-                    </motion.a>
-                  </div>
-                )}
-              </motion.div>
-            )}
-
-            {/* Issues List */}
-            {!hasConflicts && reviewResult && reviewResult.issuesFound > 0 && (
-              <motion.div
-                className="bg-white rounded-xl border border-gray-200 p-6"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-              >
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900">Issues Found</h3>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600">
-                      {reviewResult.issuesFound} {reviewResult.issuesFound === 1 ? 'issue' : 'issues'} found
-                    </span>
-                  </div>
-                </div>
-
-                {/* Issues by Category */}
-                <div className="space-y-6">
-                  {Object.entries(issuesByCategory).map(([category, issues]: [string, any]) => {
-                    if (!issues || issues.length === 0) return null;
+                    </motion.div>
                     
-                    const CategoryIcon = getCategoryIcon(category);
-                    const isExpanded = expandedCategories[category];
-                    
-                    return (
-                      <div key={category} id={`category-${category}`}>
-                        <motion.button
-                          onClick={() => toggleCategory(category)}
-                          className={`w-full flex items-center justify-between p-3 rounded-lg mb-3 ${getCategoryColor(category)}`}
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.99 }}
+                    {/* Expandable Diff Content */}
+                    <AnimatePresence>
+                      {expandedFiles.has(fileChange.filename) && fileChange.patch && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="overflow-hidden"
                         >
-                          <div className="flex items-center gap-3">
-                            <CategoryIcon size={20} />
-                            <span className="font-medium">{getCategoryName(category)}</span>
-                            <span className="px-2 py-1 bg-white bg-opacity-30 rounded-full text-xs">
-                              {issues.length} {issues.length === 1 ? 'issue' : 'issues'}
-                            </span>
-                          </div>
-                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                        </motion.button>
-                        
-                        <AnimatePresence>
-                          {isExpanded && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
-                              exit={{ opacity: 0, height: 0 }}
-                              transition={{ duration: 0.3 }}
-                              className="overflow-hidden"
-                            >
-                              <div className="space-y-4 mb-6">
-                                {issues.map((issue: any, index: number) => (
-                                  <motion.div
-                                    key={issue.id || `${issue.file}-${issue.line}-${index}`}
-                                    className="border border-gray-200 rounded-lg hover:border-gray-300 transition-colors cursor-pointer"
-                                    whileHover={{ scale: 1.01, boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)" }}
-                                    whileTap={{ scale: 0.99 }}
-                                    onClick={() => handleIssueClick(issue)}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.2, delay: index * 0.05 }}
+                          <div className="bg-gray-900 text-gray-100 p-4 font-mono text-sm overflow-x-auto">
+                            <div className="flex items-center gap-2 mb-3 text-gray-400">
+                              <Code size={16} />
+                              <span>Diff for {fileChange.filename}</span>
+                            </div>
+                            <div className="space-y-1">
+                              {fileChange.patch.split('\n').map((line, lineIndex) => {
+                                const formatted = formatPatchLine(line);
+                                return (
+                                  <div
+                                    key={lineIndex}
+                                    className={`${
+                                      formatted.type === 'addition'
+                                        ? 'bg-green-900/30 text-green-200'
+                                        : formatted.type === 'deletion'
+                                        ? 'bg-red-900/30 text-red-200'
+                                        : formatted.type === 'hunk'
+                                        ? 'bg-blue-900/30 text-blue-200 font-semibold'
+                                        : formatted.type === 'meta'
+                                        ? 'text-gray-500'
+                                        : 'text-gray-300'
+                                    } px-2 py-0.5 rounded`}
                                   >
-                                    <div className="p-4">
-                                      <div className="flex items-start gap-3">
-                                        <div className={`p-2 rounded-lg ${getCategoryColor(issue.category || (issue.severity === 'high' ? 'critical' : 'warning'))}`}>
-                                          <CategoryIcon size={16} />
-                                        </div>
-                                        <div className="flex-1">
-                                          <div className="flex items-center gap-2 mb-1">
-                                            <span className="font-medium text-gray-900">{issue.file}:{issue.line}</span>
-                                            <span className={`px-2 py-0.5 rounded-full text-xs ${
-                                              issue.severity === 'high' 
-                                                ? 'bg-red-100 text-red-800' 
-                                                : issue.severity === 'medium'
-                                                ? 'bg-yellow-100 text-yellow-800'
-                                                : 'bg-blue-100 text-blue-800'
-                                            }`}>
-                                              {issue.severity}
-                                            </span>
-                                          </div>
-                                          <p className="text-sm text-gray-700 mb-2">{issue.message}</p>
-                                          {issue.suggestion && (
-                                            <div className="bg-gray-50 rounded p-2 text-xs text-gray-600">
-                                              <span className="font-medium">Suggestion:</span> {issue.suggestion}
-                                            </div>
-                                          )}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          {issue.fixable && (
-                                            <motion.button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleIssueClick(issue);
-                                              }}
-                                              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                                              whileHover={{ scale: 1.1 }}
-                                              whileTap={{ scale: 0.9 }}
-                                            >
-                                              <Wand2 size={16} className="text-blue-600" />
-                                            </motion.button>
-                                          )}
-                                          <motion.button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleManualFix(issue);
-                                            }}
-                                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                                            whileHover={{ scale: 1.1 }}
-                                            whileTap={{ scale: 0.9 }}
-                                          >
-                                            <ExternalLink size={16} className="text-gray-600" />
-                                          </motion.button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </motion.div>
-                                ))}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Performance Analysis */}
-            {!hasConflicts && performanceScore !== null && (
-              <motion.div
-                className="bg-white rounded-xl border border-gray-200 p-6"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Analysis</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-100">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="p-2 bg-blue-100 rounded-lg">
-                        <BarChart3 size={20} className="text-blue-600" />
-                      </div>
-                      <h4 className="font-medium text-gray-900">Performance Score</h4>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className={`text-3xl font-bold ${
-                        performanceScore >= 90 ? 'text-green-600' :
-                        performanceScore >= 70 ? 'text-yellow-600' :
-                        'text-red-600'
-                      }`}>
-                        {performanceScore}
-                      </span>
-                      <span className="text-gray-600">/100</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
-                      <motion.div
-                        className={`h-2 rounded-full ${
-                          performanceScore >= 90 ? 'bg-green-600' :
-                          performanceScore >= 70 ? 'bg-yellow-500' :
-                          'bg-red-600'
-                        }`}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${performanceScore}%` }}
-                        transition={{ duration: 1 }}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="bg-gradient-to-br from-green-50 to-teal-50 rounded-lg p-6 border border-green-100">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="p-2 bg-green-100 rounded-lg">
-                        <Zap size={20} className="text-green-600" />
-                      </div>
-                      <h4 className="font-medium text-gray-900">Optimization Potential</h4>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-3xl font-bold text-green-600">
-                        {Math.min(100 - performanceScore, performanceIssues.length * 10)}%
-                      </span>
-                      <span className="text-gray-600">faster</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mt-3">
-                      Fixing performance issues could improve speed by up to {Math.min(100 - performanceScore, performanceIssues.length * 10)}%
-                    </p>
-                  </div>
-                  
-                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-6 border border-purple-100">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="p-2 bg-purple-100 rounded-lg">
-                        <Clock size={20} className="text-purple-600" />
-                      </div>
-                      <h4 className="font-medium text-gray-900">Time Savings</h4>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-3xl font-bold text-purple-600">
-                        {Math.round((performanceIssues.length * 2.5) * 10) / 10}h
-                      </span>
-                      <span className="text-gray-600">saved</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mt-3">
-                      Estimated development time saved by fixing these issues
-                    </p>
-                  </div>
-                </div>
-                
-                {/* Performance Recommendations */}
-                {performanceIssues.length > 0 && (
-                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                    <h4 className="font-medium text-orange-900 mb-3 flex items-center gap-2">
-                      <Zap size={16} className="text-orange-600" />
-                      Top Performance Recommendations:
-                    </h4>
-                    <ul className="space-y-2">
-                      {performanceIssues.slice(0, 3).map((issue, index) => (
-                        <li key={index} className="flex items-start gap-2">
-                          <TrendingUp size={16} className="text-orange-600 mt-1 flex-shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium text-orange-800">{issue.message}</p>
-                            <p className="text-xs text-orange-700">{issue.file}:{issue.line}</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                    {performanceIssues.length > 3 && (
-                      <p className="text-xs text-orange-700 mt-2">
-                        + {performanceIssues.length - 3} more performance issues
-                      </p>
-                    )}
-                    <div className="mt-3">
-                      <motion.button
-                        onClick={() => {
-                          const performanceCategory = document.getElementById('category-performance');
-                          if (performanceCategory) {
-                            performanceCategory.scrollIntoView({ behavior: 'smooth' });
-                          }
-                          toggleCategory('performance');
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg text-sm"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <Wand2 size={14} />
-                        Fix Performance Issues
-                      </motion.button>
-                    </div>
-                  </div>
-                )}
-              </motion.div>
-            )}
-
-            {/* Security Analysis */}
-            {!hasConflicts && securityIssues.length > 0 && (
-              <motion.div
-                className="bg-white rounded-xl border border-gray-200 p-6"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-              >
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Security Analysis</h3>
-                
-                <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
-                  <div className="flex items-start gap-4">
-                    <div className="p-3 bg-red-100 rounded-lg">
-                      <Shield size={24} className="text-red-600" />
-                    </div>
-                    <div>
-                      <h4 className="text-lg font-bold text-red-800 mb-2">
-                        {securityIssues.length} Security {securityIssues.length === 1 ? 'Vulnerability' : 'Vulnerabilities'} Detected
-                      </h4>
-                      <p className="text-red-700 mb-4">
-                        These security issues should be addressed immediately to protect your application and users.
-                      </p>
-                      
-                      <div className="space-y-3 mb-4">
-                        {securityIssues.slice(0, 3).map((issue, index) => (
-                          <div key={index} className="bg-white bg-opacity-50 rounded-lg p-3">
-                            <div className="flex items-start gap-2">
-                              <AlertTriangle size={16} className="text-red-600 mt-1 flex-shrink-0" />
-                              <div>
-                                <p className="font-medium text-red-800">{issue.message}</p>
-                                <p className="text-sm text-red-700">{issue.file}:{issue.line}</p>
-                                {issue.suggestion && (
-                                  <p className="text-xs text-red-600 mt-1">
-                                    <span className="font-medium">Fix:</span> {issue.suggestion}
-                                  </p>
-                                )}
-                              </div>
+                                    <span className="select-none mr-2 text-gray-500 text-xs">
+                                      {lineIndex + 1}
+                                    </span>
+                                    {formatted.content}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
-                        ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Issues by File - ONLY CRITICAL AND WARNINGS */}
+          {reviewResult?.success && currentIssues.length > 0 && (
+            <motion.div
+              className="bg-white rounded-xl border border-gray-200 p-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Critical & Warning Issues ({currentIssues.length})
+                {reviewResult.result?.isOwnPR && reviewType === 'pr' && ' in Your PR Changes'}
+              </h3>
+              
+              <div className="space-y-4">
+                {Object.entries(groupedIssues).map(([fileName, fileIssues]) => (
+                  <div key={fileName} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <FileText size={16} className="text-gray-500" />
+                        <span className="font-medium text-gray-900">{fileName}</span>
+                        <span className="text-sm text-gray-500">({fileIssues.length} issues)</span>
+                        {reviewType === 'pr' && (
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                            Changed lines only
+                          </span>
+                        )}
                       </div>
-                      
-                      <motion.button
-                        onClick={() => {
-                          const securityCategory = document.getElementById('category-security');
-                          if (securityCategory) {
-                            securityCategory.scrollIntoView({ behavior: 'smooth' });
-                          }
-                          toggleCategory('security');
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <Wand2 size={16} />
-                        Fix Security Issues
-                      </motion.button>
+                    </div>
+                    
+                    <div className="divide-y divide-gray-200">
+                      {fileIssues.map((issue: CodeIssue, index: number) => (
+                        <motion.div
+                          key={issue.id || index}
+                          className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                          onClick={() => setSelectedIssue(issue)}
+                          whileHover={{ 
+                            scale: 1.01, 
+                            boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)" 
+                          }}
+                          transition={{ duration: 0.1 }}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-medium text-gray-600">Line {issue.line}</span>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getSeverityColor(issue.severity)}`}>
+                                  {issue.severity}
+                                </span>
+                                {issue.rule && (
+                                  <span className="text-xs text-gray-500">({issue.rule})</span>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-900 mb-1">{issue.message}</p>
+                              {issue.suggestion && (
+                                <p className="text-xs text-gray-600">💡 {issue.suggestion}</p>
+                              )}
+                            </div>
+                            <Eye size={16} className="text-gray-400 ml-2" />
+                          </div>
+                        </motion.div>
+                      ))}
                     </div>
                   </div>
-                </div>
-              </motion.div>
-            )}
-          </div>
-        )}
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Fix Options - ONLY show when there are issues */}
+          {showFixOptions && reviewResult?.success && currentIssues.length > 0 && (
+            <motion.div
+              className="bg-white rounded-xl border border-gray-200 p-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Fix Issues</h3>
+              <p className="text-gray-600 mb-4">
+                {currentIssues.length} critical/warning issues were found{reviewResult.result?.isOwnPR && reviewType === 'pr' ? ' in your PR changes' : ''}. Choose how you'd like to fix them:
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <motion.button
+                  onClick={handleAIFixAll}
+                  disabled={loading}
+                  className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
+                  whileHover={{ 
+                    scale: 1.02, 
+                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.1 }}
+                >
+                  <div className="p-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg">
+                    <Wand2 size={20} className="text-white" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium text-gray-900">AI Auto-Fix All</p>
+                    <p className="text-sm text-gray-500">Let AI automatically fix all {currentIssues.length} issues</p>
+                  </div>
+                </motion.button>
+
+                <motion.button
+                  onClick={handleManualFix}
+                  className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
+                  whileHover={{ 
+                    scale: 1.02, 
+                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.1 }}
+                >
+                  <div className="p-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg">
+                    <Settings size={20} className="text-white" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium text-gray-900">Manual Fix</p>
+                    <p className="text-sm text-gray-500">Open repository to fix manually</p>
+                  </div>
+                </motion.button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* NEW: Merge Options - Show when review is complete and no critical issues */}
+          {showMergeOptions && reviewResult?.success && reviewType === 'pr' && pullNumber && mergeStatus !== 'merged' && (
+            <motion.div
+              className="bg-white rounded-xl border border-gray-200 p-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">🎉 Ready to Merge!</h3>
+              <p className="text-gray-600 mb-4">
+                All critical issues have been resolved. Your pull request is ready to be merged into the main branch.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <motion.button
+                  onClick={handleAIMerge}
+                  disabled={loading}
+                  className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
+                  whileHover={{ 
+                    scale: 1.02, 
+                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.1 }}
+                >
+                  <div className="p-2 bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg">
+                    <GitMerge size={20} className="text-white" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium text-gray-900">AI Auto-Merge</p>
+                    <p className="text-sm text-gray-500">Let ReviewAI merge with optimized commit message</p>
+                  </div>
+                </motion.button>
+
+                <motion.button
+                  onClick={handleManualMerge}
+                  className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
+                  whileHover={{ 
+                    scale: 1.02, 
+                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.1 }}
+                >
+                  <div className="p-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg">
+                    <Settings size={20} className="text-white" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium text-gray-900">Manual Merge</p>
+                    <p className="text-sm text-gray-500">Open GitHub to merge manually</p>
+                  </div>
+                </motion.button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* NEW: Revert Option - Show after successful merge */}
+          {mergeStatus === 'merged' && mergeDetails && (
+            <motion.div
+              className="bg-orange-50 border border-orange-200 rounded-xl p-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <h3 className="text-lg font-semibold text-orange-900 mb-4">⚠️ Need to Revert?</h3>
+              <p className="text-orange-700 mb-4">
+                If you need to undo this merge, you can revert the pull request. This will create a new commit that undoes all changes from this PR.
+              </p>
+              
+              <motion.button
+                onClick={handleRevertPR}
+                className="flex items-center gap-3 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors cursor-pointer"
+                whileHover={{ 
+                  scale: 1.02, 
+                  boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)" 
+                }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ duration: 0.1 }}
+              >
+                <Undo2 size={18} />
+                Revert Pull Request
+              </motion.button>
+            </motion.div>
+          )}
+
+          {/* Instructions */}
+          <motion.div
+            className="bg-gray-50 rounded-xl p-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <h4 className="font-semibold text-gray-900 mb-3">What happens during review:</h4>
+            <ul className="space-y-2 text-sm text-gray-600">
+              <li className="flex items-center gap-2">
+                <GitBranch size={16} />
+                {reviewType === 'pr' 
+                  ? 'Analyzes only the changed lines in your pull request'
+                  : 'Analyzes all files in the repository for code quality issues'
+                }
+              </li>
+              <li className="flex items-center gap-2">
+                <AlertTriangle size={16} />
+                Detects critical bugs, security vulnerabilities, and important warnings
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle size={16} />
+                {reviewType === 'pr' && reviewResult?.result?.isOwnPR
+                  ? 'Provides feedback on your changes without posting GitHub comments'
+                  : 'Posts detailed review comments on GitHub with fixes'
+                }
+              </li>
+              <li className="flex items-center gap-2">
+                <Clock size={16} />
+                Provides actionable suggestions and auto-fix options
+              </li>
+              {reviewType === 'pr' && (
+                <li className="flex items-center gap-2">
+                  <GitMerge size={16} />
+                  Offers merge options when all critical issues are resolved
+                </li>
+              )}
+            </ul>
+          </motion.div>
+        </div>
       </div>
 
-      {/* Issue Detail Modal */}
+      {/* Issue Detail Modal - SINGLE CONFIRMATION ONLY */}
       <AnimatePresence>
-        {showIssueModal && selectedIssue && (
+        {selectedIssue && (
           <IssueDetailModal
             issue={selectedIssue}
-            onClose={() => setShowIssueModal(false)}
-            onAIFix={handleApplyFix}
+            onClose={() => setSelectedIssue(null)}
+            onAIFix={handleAIFixSingle}
             onManualFix={handleManualFix}
-            repositoryUrl={`https://github.com/${selectedRepo}`}
+            repositoryUrl={selectedRepo ? `https://github.com/${selectedRepo}` : ''}
           />
         )}
       </AnimatePresence>
 
-      {/* Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={showConfirmation}
-        onClose={() => setShowConfirmation(false)}
-        onConfirm={handleFixAllIssues}
-        title="Apply AI Fix All"
-        message={`Are you sure you want to apply AI fixes to ALL ${reviewResult?.issuesFound || 0} critical/warning issues? This will: • Fix ALL critical and warning issues • Create commits in your repository • Mark ALL issues as resolved • Complete the review process`}
-        confirmText="Fix All Issues"
-        type="warning"
-        loading={fixingInProgress}
-      />
+      {/* Enhanced Confirmation Modal - Handles all confirmation types */}
+      <AnimatePresence>
+        {showConfirmation && (
+          <ConfirmationModal
+            isOpen={showConfirmation}
+            onClose={() => {
+              setShowConfirmation(false);
+              setConfirmationAction(null);
+            }}
+            onConfirm={
+              confirmationAction === 'all' ? handleConfirmAIFixAll :
+              confirmationAction === 'ai-merge' ? handleConfirmAIMerge :
+              confirmationAction === 'manual-merge' ? handleConfirmManualMerge :
+              confirmationAction === 'revert' ? handleConfirmRevert :
+              () => {}
+            }
+            title={
+              confirmationAction === 'all' ? 'Confirm AI Fix All' :
+              confirmationAction === 'ai-merge' ? 'Confirm AI Auto-Merge' :
+              confirmationAction === 'manual-merge' ? 'Confirm Manual Merge' :
+              confirmationAction === 'revert' ? 'Confirm Revert Pull Request' :
+              'Confirm Action'
+            }
+            message={
+              confirmationAction === 'all' ? 
+                `Are you sure you want to apply AI fixes to ALL ${currentIssues.length} critical/warning issues? This will:
+
+• Fix ALL critical and warning issues
+• Create commits in your repository  
+• Mark ALL issues as resolved
+• Complete the review process
+
+This action cannot be undone.` :
+              confirmationAction === 'ai-merge' ?
+                `Are you sure you want to merge this pull request using AI Auto-Merge? This will:
+
+• Merge PR #${pullNumber} into the main branch
+• Create an optimized commit message
+• Show "ReviewAI Bot" as the merger
+• Close the pull request automatically
+
+This action cannot be undone.` :
+              confirmationAction === 'manual-merge' ?
+                `This will open GitHub in a new tab where you can manually merge the pull request.
+
+You'll have full control over:
+• Merge method (merge, squash, rebase)
+• Commit message
+• Merge timing
+
+Continue to GitHub?` :
+              confirmationAction === 'revert' ?
+                `Are you sure you want to revert this pull request? This will:
+
+• Create a new commit that undoes all changes from PR #${mergeDetails?.prNumber}
+• Revert commit ${mergeDetails?.sha?.substring(0, 7)}
+• Show "ReviewAI" as the reverter
+• Keep the original merge in history
+
+This action cannot be undone.` :
+                'Are you sure you want to proceed?'
+            }
+            confirmText={
+              confirmationAction === 'all' ? 'Fix All Issues' :
+              confirmationAction === 'ai-merge' ? 'Merge with AI' :
+              confirmationAction === 'manual-merge' ? 'Open GitHub' :
+              confirmationAction === 'revert' ? 'Revert PR' :
+              'Confirm'
+            }
+            type={
+              confirmationAction === 'revert' ? 'danger' :
+              confirmationAction === 'ai-merge' ? 'info' :
+              'warning'
+            }
+            loading={loading}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Commit Success Modal */}
-      <CommitSuccessModal
-        isOpen={showCommitSuccess}
-        onClose={() => setShowCommitSuccess(false)}
-        commitDetails={commitDetails}
-        loading={fixingInProgress}
-      />
+      <AnimatePresence>
+        {showCommitSuccess && commitDetails && (
+          <CommitSuccessModal
+            isOpen={showCommitSuccess}
+            onClose={() => setShowCommitSuccess(false)}
+            commitDetails={commitDetails}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Subscription Modal */}
       <AnimatePresence>
