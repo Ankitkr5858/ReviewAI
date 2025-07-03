@@ -39,7 +39,7 @@ const Repositories: React.FC = () => {
   ];
 
   const getStatusFromRepo = (repo: any) => {
-    // CRITICAL: Check if this repository has been reviewed and completed by ReviewAI
+    // Check if this repository has been reviewed and completed by ReviewAI
     const reviewHistory = JSON.parse(localStorage.getItem('review_history') || '[]');
     const fixHistory = JSON.parse(localStorage.getItem('fix_history') || '[]');
     
@@ -146,7 +146,7 @@ const Repositories: React.FC = () => {
     navigate('/test', { state: { selectedRepo: repo.full_name } });
   };
 
-  // FIXED: Handle refresh with overlay spinner
+  // Handle refresh with overlay spinner
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
@@ -158,7 +158,7 @@ const Repositories: React.FC = () => {
     }
   };
 
-  // FIXED: Handle sync with overlay spinner
+  // Handle sync with overlay spinner
   const handleSync = async () => {
     setSyncing(true);
     try {
@@ -174,13 +174,13 @@ const Repositories: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* FIXED HEADER */}
+      {/* Header */}
       <Header 
         onMenuClick={() => {}} 
         onSubscriptionClick={() => setShowSubscriptionModal(true)}
       />
 
-      {/* OVERLAY SPINNERS */}
+      {/* Overlay Spinners */}
       <OverlaySpinner 
         isVisible={refreshing} 
         text="Refreshing repositories..." 
@@ -190,9 +190,9 @@ const Repositories: React.FC = () => {
         text="Syncing repositories..." 
       />
 
-      {/* CENTERED CONTENT WITH EQUAL MARGINS - LIKE LANDING PAGE */}
-      <div className="flex justify-center px-6 py-6">
-        <div className="w-full max-w-7xl mx-auto space-y-6">
+      {/* Main Content */}
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -257,7 +257,7 @@ const Repositories: React.FC = () => {
                 />
               </div>
               
-              {/* Beautiful Status Dropdown */}
+              {/* Status Dropdown */}
               <div className="relative">
                 <motion.button
                   onClick={() => setShowFilterDropdown(!showFilterDropdown)}

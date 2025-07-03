@@ -130,16 +130,16 @@ const GitHubSetup: React.FC = () => {
       >
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Required Setup</h3>
         
-        {/* FIXED: Truly Horizontal Git Provider Selection */}
+        {/* Git Provider Selection */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-3">
             Select Git Provider
           </label>
-          <div className="flex gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <motion.button
               type="button"
               onClick={() => setSelectedProvider('github')}
-              className={`flex-1 flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-all ${
+              className={`flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-all ${
                 selectedProvider === 'github' 
                   ? 'border-blue-500 bg-blue-50' 
                   : 'border-gray-200 hover:border-gray-300'
@@ -147,14 +147,14 @@ const GitHubSetup: React.FC = () => {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              <Github size={20} className={selectedProvider === 'github' ? 'text-blue-600' : 'text-gray-700'} />
-              <span className={`text-sm font-medium ${selectedProvider === 'github' ? 'text-blue-600' : 'text-gray-700'}`}>GitHub</span>
+              <Github size={24} className={selectedProvider === 'github' ? 'text-blue-600' : 'text-gray-700'} />
+              <span className={selectedProvider === 'github' ? 'text-blue-600' : 'text-gray-700'}>GitHub</span>
             </motion.button>
             
             <motion.button
               type="button"
               onClick={() => setSelectedProvider('gitlab')}
-              className={`flex-1 flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-all ${
+              className={`flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-all ${
                 selectedProvider === 'gitlab' 
                   ? 'border-blue-500 bg-blue-50' 
                   : 'border-gray-200 hover:border-gray-300'
@@ -162,14 +162,14 @@ const GitHubSetup: React.FC = () => {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              <GitlabIcon size={20} className={selectedProvider === 'gitlab' ? 'text-blue-600' : 'text-gray-700'} />
-              <span className={`text-sm font-medium ${selectedProvider === 'gitlab' ? 'text-blue-600' : 'text-gray-700'}`}>GitLab</span>
+              <GitlabIcon size={24} className={selectedProvider === 'gitlab' ? 'text-blue-600' : 'text-gray-700'} />
+              <span className={selectedProvider === 'gitlab' ? 'text-blue-600' : 'text-gray-700'}>GitLab</span>
             </motion.button>
             
             <motion.button
               type="button"
               onClick={() => setSelectedProvider('bitbucket')}
-              className={`flex-1 flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-all ${
+              className={`flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-all ${
                 selectedProvider === 'bitbucket' 
                   ? 'border-blue-500 bg-blue-50' 
                   : 'border-gray-200 hover:border-gray-300'
@@ -177,8 +177,8 @@ const GitHubSetup: React.FC = () => {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              <Box size={20} className={selectedProvider === 'bitbucket' ? 'text-blue-600' : 'text-gray-700'} />
-              <span className={`text-sm font-medium ${selectedProvider === 'bitbucket' ? 'text-blue-600' : 'text-gray-700'}`}>Bitbucket</span>
+              <Box size={24} className={selectedProvider === 'bitbucket' ? 'text-blue-600' : 'text-gray-700'} />
+              <span className={selectedProvider === 'bitbucket' ? 'text-blue-600' : 'text-gray-700'}>Bitbucket</span>
             </motion.button>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, GitBranch, AlertCircle, AlertTriangle, CheckCircle, Clock, Wand2, Settings, ArrowLeft, Eye, RefreshCw, FileText, ExternalLink, ChevronDown, Plus, Minus, Code, GitMerge, Undo2 } from 'lucide-react';
+import { Play, GitBranch, AlertCircle, AlertTriangle, CheckCircle, Clock, Wand2, Settings, ArrowLeft, Eye, RefreshCw, FileText, ExternalLink, ChevronDown, Plus, Minus, Code, GitMerge, Undo2, Search } from 'lucide-react';
 import { useGitHubIntegration } from '../hooks/useGitHubIntegration';
 import { useNavigate, useLocation } from 'react-router-dom';
 import IssueDetailModal from './IssueDetailModal';
@@ -60,6 +60,8 @@ interface FileChange {
 
 const TestReview: React.FC = () => {
   const [selectedRepo, setSelectedRepo] = useState('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [showDropdown, setShowDropdown] = useState<boolean>(false);
   const [pullNumber, setPullNumber] = useState('');
   const [pullRequestUrl, setPullRequestUrl] = useState('');
   const [reviewType, setReviewType] = useState<'pr' | 'main'>('pr'); // DEFAULT TO PR
@@ -162,6 +164,28 @@ const TestReview: React.FC = () => {
       }
     }
   }, [reviewResult, reviewType, pullNumber, mergeStatus]);
+
+  // FIXED: Filter repositories based on search term
+  const filteredRepositories = repositories.filter(repo =>
+    repo.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    repo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (repo.description && repo.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  // Handle repository selection from dropdown
+  const handleRepoSelect = (repoFullName: string) => {
+    setSelectedRepo(repoFullName);
+    setSearchTerm('');
+    setShowDropdown(false);
+  };
+
+  // Handle search input change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    setSelectedRepo(value); // Allow manual typing
+    setShowDropdown(true);
+  };
 
   const loadPullRequests = async () => {
     if (!selectedRepo) return;
@@ -747,18 +771,90 @@ Automated revert by ReviewAI • https://reviewai.com`,
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Select Repository
                   </label>
-                  <select
-                    value={selectedRepo}
-                    onChange={(e) => setSelectedRepo(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
-                  >
-                    <option value="">Choose a repository...</option>
-                    {repositories.map((repo) => (
-                      <option key={repo.id} value={repo.full_name}>
-                        {repo.full_name} ({repo.language || 'Unknown'})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative flex-1">
+                    <GitBranch size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={selectedRepo}
+                      onChange={handleSearchChange}
+                      onFocus={() => setShowDropdown(true)}
+                      placeholder="owner/repository or search..."
+                      className="w-full pl-10 pr-10 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <Search size={20} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    
+                    {/* FIXED: Modern dropdown with search */}
+                    <AnimatePresence>
+                      {showDropdown && (searchTerm || !selectedRepo) && (
+                        <>
+                          {/* Backdrop */}
+                          <div 
+                            className="fixed inset-0 z-10" 
+                            onClick={() => setShowDropdown(false)}
+                          />
+                          
+                          {/* Dropdown */}
+                          <motion.div
+                            className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-20 max-h-64 overflow-y-auto"
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            {filteredRepositories.length > 0 ? (
+                              <div className="p-2">
+                                {filteredRepositories.slice(0, 10).map((repo) => (
+                                  <motion.button
+                                    key={repo.id}
+                                    onClick={() => handleRepoSelect(repo.full_name)}
+                                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                                    whileHover={{ scale: 1.01 }}
+                                    whileTap={{ scale: 0.99 }}
+                                  >
+                                    <div className="p-2 bg-gray-100 rounded-lg">
+                                      <GitBranch size={16} className="text-gray-600" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-medium text-gray-900 truncate">
+                                        {repo.full_name}
+                                      </div>
+                                      <div className="text-sm text-gray-500 truncate">
+                                        {repo.description || 'No description'}
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        {repo.language && (
+                                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                                            {repo.language}
+                                          </span>
+                                        )}
+                                        <span className="text-xs text-gray-500">
+                                          ⭐ {repo.stargazers_count}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </motion.button>
+                                ))}
+                                {filteredRepositories.length > 10 && (
+                                  <div className="p-3 text-center text-sm text-gray-500">
+                                    Showing first 10 results. Keep typing to refine...
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="p-4 text-center text-gray-500">
+                                <GitBranch size={24} className="mx-auto mb-2 text-gray-400" />
+                                <p>No repositories found</p>
+                                <p className="text-sm">Try a different search term</p>
+                              </div>
+                            )}
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Enter the GitHub repository in the format "owner/repository" or search from your connected repositories
+                  </p>
                 </div>
 
                 {/* Review Type - DEFAULT TO PR */}

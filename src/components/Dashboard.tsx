@@ -127,7 +127,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // FIXED: Handle refresh with overlay spinner
+  // Handle refresh with overlay spinner
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
@@ -220,28 +220,23 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* FIXED HEADER */}
+      {/* Header */}
       <Header 
         onMenuClick={() => {}} 
         onSubscriptionClick={() => setShowSubscriptionModal(true)}
       />
 
-      {/* OVERLAY SPINNER for refresh */}
+      {/* Overlay Spinner for refresh */}
       <OverlaySpinner 
         isVisible={refreshing} 
         text="Refreshing dashboard data..." 
       />
 
-      {/* CENTERED CONTENT WITH EQUAL MARGINS - LIKE LANDING PAGE */}
-      <div className="flex justify-center px-6 py-6">
-        <div className="w-full max-w-7xl mx-auto">
+      {/* Main Content */}
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto">
           {/* Page Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="flex items-center justify-between mb-6"
-          >
+          <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">Dashboard</h1>
               <div className="flex items-center gap-4 text-sm text-gray-600">
@@ -276,7 +271,7 @@ const Dashboard: React.FC = () => {
               <RefreshCw size={16} className={(loading || refreshing) ? 'animate-spin' : ''} />
               Refresh
             </motion.button>
-          </motion.div>
+          </div>
 
           {/* Stats Grid */}
           <motion.div

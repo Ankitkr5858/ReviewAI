@@ -25,6 +25,8 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import FeedbackSection from './FeedbackSection';
+import BookingCalendar from './BookingCalendar';
+import FAQSection from './FAQSection';
 
 interface LandingPageProps {
   onGetStarted: () => void;
@@ -501,7 +503,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
     }
   };
 
-  // Competitor comparison data
+  // Competitor comparison data - UPDATED with real competitors
   const competitors = [
     {
       name: 'ReviewAI',
@@ -514,47 +516,47 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         gitlabIntegration: true,
         bitbucketIntegration: true,
         setupTime: '2 min',
-        price: '$12/year',
+        price: 'Free',
         teamCollaboration: true,
         customRules: true
       }
     },
     {
-      name: 'SonarQube',
+      name: 'CodeRabbit',
       features: {
-        aiPowered: false,
+        aiPowered: true,
         autoFix: false,
         securityScanning: true,
-        performanceAnalysis: true,
+        performanceAnalysis: false,
         githubIntegration: true,
-        gitlabIntegration: true,
+        gitlabIntegration: false,
         bitbucketIntegration: false,
-        setupTime: '30+ min',
-        price: '$120/year',
+        setupTime: '5 min',
+        price: '$15/month',
         teamCollaboration: true,
-        customRules: true
+        customRules: false
       }
     },
     {
-      name: 'DeepSource',
+      name: 'Codeant AI',
       features: {
         aiPowered: true,
         autoFix: true,
         securityScanning: true,
         performanceAnalysis: false,
         githubIntegration: true,
-        gitlabIntegration: false,
+        gitlabIntegration: true,
         bitbucketIntegration: false,
         setupTime: '10 min',
-        price: '$99/year',
+        price: '$19/month',
         teamCollaboration: true,
         customRules: false
       }
     },
     {
-      name: 'CodeClimate',
+      name: 'Qodo.ai',
       features: {
-        aiPowered: false,
+        aiPowered: true,
         autoFix: false,
         securityScanning: true,
         performanceAnalysis: true,
@@ -562,7 +564,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         gitlabIntegration: false,
         bitbucketIntegration: false,
         setupTime: '15 min',
-        price: '$199/year',
+        price: '$10/month',
         teamCollaboration: true,
         customRules: true
       }
@@ -1275,9 +1277,30 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </section>
 
-      {/* FEEDBACK SECTION - ADDED BACK */}
+      {/* FAQ Section */}
+      <section id="faq">
+        <FAQSection />
+      </section>
+
+      {/* FEEDBACK SECTION */}
       <section id="feedback">
         <FeedbackSection />
+      </section>
+
+      {/* Booking Calendar Section */}
+      <section id="book-call" className="py-20 bg-gradient-to-br from-gray-50 to-blue-50/30">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Book a <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Demo Call</span>
+            </h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Schedule a personalized demo to see how ReviewAI can transform your development workflow
+            </p>
+          </div>
+          
+          <BookingCalendar />
+        </div>
       </section>
 
       {/* CTA Section */}
@@ -1315,17 +1338,32 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
+      <footer className="bg-gray-900 text-white py-6">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <div className="flex items-center gap-3 mb-6 md:mb-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
               <div className="p-2 bg-white rounded-lg">
                 <Wand2 size={20} className="text-gray-900" />
               </div>
-              <div>
-                <div className="font-bold">ReviewAI</div>
-                <div className="text-sm text-gray-400">Automated Code Review</div>
+              <div className="font-bold">ReviewAI</div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">
+                <img
+                  src="/DSC_0222.jpg"
+                  alt="Ankit Kumar"
+                  className="w-7 h-7 rounded-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextElementSibling!.style.display = 'flex';
+                  }}
+                />
+                <div className="w-7 h-7 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full items-center justify-center text-white font-bold text-xs hidden">
+                  AK
+                </div>
               </div>
+              <span className="text-sm text-gray-400">Designed & Developed By - Ankit Kumar</span>
             </div>
             
             <div className="text-sm text-gray-400">

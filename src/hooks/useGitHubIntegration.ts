@@ -63,6 +63,33 @@ export const useGitHubIntegration = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // FIXED: Get user identifier for persistent data
+  const getUserIdentifier = async (token: string): Promise<string> => {
+    try {
+      const github = new GitHubService(token);
+      const userData = await github.request('/user');
+      return userData.login; // Use GitHub username as unique identifier
+    } catch (error) {
+      console.error('Failed to get user identifier:', error);
+      return 'default_user'; // Fallback
+    }
+  };
+
+  // FIXED: Store data with user-specific keys
+  const storeUserData = async (token: string, key: string, data: any) => {
+    const userId = await getUserIdentifier(token);
+    const userKey = `${userId}_${key}`;
+    localStorage.setItem(userKey, JSON.stringify(data));
+  };
+
+  // FIXED: Retrieve data with user-specific keys
+  const getUserData = async (token: string, key: string): Promise<any> => {
+    const userId = await getUserIdentifier(token);
+    const userKey = `${userId}_${key}`;
+    const data = localStorage.getItem(userKey);
+    return data ? JSON.parse(data) : null;
+  };
+
   const connectGitHub = async (token: string) => {
     try {
       setLoading(true);
@@ -93,9 +120,13 @@ export const useGitHubIntegration = () => {
       // Store token securely (in production, use proper encryption)
       localStorage.setItem('github_token', token);
       
-      // Load dashboard data
-      await loadDashboardData(github, uniqueRepos);
+      // FIXED: Store repositories with user-specific key
+      await storeUserData(token, 'repositories', uniqueRepos);
       
+      // Load dashboard data
+      await loadDashboardData(github, uniqueRepos, token);
+      
+      // REMOVED: No more alert on successful connection
       return { success: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to connect to GitHub';
@@ -106,11 +137,11 @@ export const useGitHubIntegration = () => {
     }
   };
 
-  const loadDashboardData = async (github: GitHubService, repos: GitHubRepository[]) => {
+  const loadDashboardData = async (github: GitHubService, repos: GitHubRepository[], token: string) => {
     try {
-      // Get stored review history from localStorage
-      const reviewHistory = JSON.parse(localStorage.getItem('review_history') || '[]');
-      const fixHistory = JSON.parse(localStorage.getItem('fix_history') || '[]');
+      // FIXED: Get user-specific review history
+      const reviewHistory = await getUserData(token, 'review_history') || [];
+      const fixHistory = await getUserData(token, 'fix_history') || [];
       const completedReviews = reviewHistory.length;
       
       // Calculate actual time saved based on review complexity
@@ -142,7 +173,7 @@ export const useGitHubIntegration = () => {
         .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
         .slice(0, 8); // Get up to 8 recent reviews
 
-      recentReviews.forEach((review: any, index: number) => {
+      for (const review of recentReviews) {
         const reviewDate = new Date(review.timestamp);
         const repo = repos.find(r => r.full_name === review.repository);
         
@@ -153,7 +184,7 @@ export const useGitHubIntegration = () => {
         
         if (review.result?.issuesFound > 0) {
           // Check if there are unresolved issues stored
-          const unresolvedIssues = getUnresolvedIssues(review.repository);
+          const unresolvedIssues = await getUnresolvedIssues(review.repository, token);
           remainingIssues = unresolvedIssues.length;
           
           if (remainingIssues > 0) {
@@ -171,12 +202,12 @@ export const useGitHubIntegration = () => {
             progress = 100;
             
             // Update the review history to reflect completion
-            updateReviewCompletion(review.repository);
+            await updateReviewCompletion(review.repository, token);
           }
         }
 
         activeReviewsData.push({
-          id: `review-${index}`,
+          id: `review-${review.timestamp}`,
           repository: review.repository?.split('/')[1] || 'unknown',
           branch: 'main',
           status,
@@ -187,7 +218,7 @@ export const useGitHubIntegration = () => {
           repositoryUrl: repo?.html_url,
           reviewData: review // Store full review data for resuming
         });
-      });
+      }
 
       // Add some repositories that haven't been reviewed recently
       const unreviewedRepos = repos
@@ -231,15 +262,15 @@ export const useGitHubIntegration = () => {
       const activities: RecentActivity[] = [];
       
       // Add review activities from history with REAL data
-      reviewHistory.slice(-5).forEach((review: any, index: number) => {
-        const unresolvedIssues = getUnresolvedIssues(review.repository);
+      for (const review of reviewHistory.slice(-5)) {
+        const unresolvedIssues = await getUnresolvedIssues(review.repository, token);
         const totalIssues = review.result?.issuesFound || 0;
         const resolvedIssues = Math.max(0, totalIssues - unresolvedIssues.length);
         const isCompleted = totalIssues === 0 || unresolvedIssues.length === 0;
         const repo = repos.find(r => r.full_name === review.repository);
         
         activities.push({
-          id: `review-${review.timestamp}-${index}`,
+          id: `review-${review.timestamp}`,
           type: 'review' as const,
           message: isCompleted 
             ? `Code review completed for ${review.repository?.split('/')[1] || 'repository'}`
@@ -257,7 +288,7 @@ export const useGitHubIntegration = () => {
             timestamp: review.timestamp
           }
         });
-      });
+      }
 
       // Add fix activities from localStorage with REAL data
       fixHistory.slice(-3).forEach((fix: any, index: number) => {
@@ -318,15 +349,18 @@ export const useGitHubIntegration = () => {
     }
   };
 
-  // Helper function to get unresolved issues for a repository
-  const getUnresolvedIssues = (repositoryName: string) => {
-    const unresolvedKey = `unresolved_issues_${repositoryName}`;
-    return JSON.parse(localStorage.getItem(unresolvedKey) || '[]');
+  // FIXED: Helper function to get unresolved issues for a repository with user-specific data
+  const getUnresolvedIssues = async (repositoryName: string, token: string) => {
+    const userId = await getUserIdentifier(token);
+    const unresolvedKey = `${userId}_unresolved_issues_${repositoryName}`;
+    const data = localStorage.getItem(unresolvedKey);
+    return data ? JSON.parse(data) : [];
   };
 
-  // Helper function to store unresolved issues
-  const storeUnresolvedIssues = (repositoryName: string, issues: any[]) => {
-    const unresolvedKey = `unresolved_issues_${repositoryName}`;
+  // FIXED: Helper function to store unresolved issues with user-specific data
+  const storeUnresolvedIssues = async (repositoryName: string, issues: any[], token: string) => {
+    const userId = await getUserIdentifier(token);
+    const unresolvedKey = `${userId}_unresolved_issues_${repositoryName}`;
     // Add unique IDs to issues if they don't have them
     const issuesWithIds = issues.map((issue, index) => ({
       ...issue,
@@ -349,9 +383,10 @@ export const useGitHubIntegration = () => {
     return Math.abs(hash).toString(36);
   };
 
-  // Helper function to remove resolved issues
-  const removeResolvedIssues = (repositoryName: string, resolvedIssueIds: string[]) => {
-    const unresolvedKey = `unresolved_issues_${repositoryName}`;
+  // FIXED: Helper function to remove resolved issues with user-specific data
+  const removeResolvedIssues = async (repositoryName: string, resolvedIssueIds: string[], token: string) => {
+    const userId = await getUserIdentifier(token);
+    const unresolvedKey = `${userId}_unresolved_issues_${repositoryName}`;
     const currentIssues = JSON.parse(localStorage.getItem(unresolvedKey) || '[]');
     const remainingIssues = currentIssues.filter((issue: any) => 
       !resolvedIssueIds.includes(issue.id) && !resolvedIssueIds.includes(issue.hash)
@@ -361,9 +396,9 @@ export const useGitHubIntegration = () => {
     return remainingIssues;
   };
 
-  // Helper function to mark review as completed
-  const updateReviewCompletion = (repositoryName: string) => {
-    const reviewHistory = JSON.parse(localStorage.getItem('review_history') || '[]');
+  // FIXED: Helper function to mark review as completed with user-specific data
+  const updateReviewCompletion = async (repositoryName: string, token: string) => {
+    const reviewHistory = await getUserData(token, 'review_history') || [];
     const updatedHistory = reviewHistory.map((review: any) => {
       if (review.repository === repositoryName) {
         return {
@@ -378,26 +413,30 @@ export const useGitHubIntegration = () => {
       }
       return review;
     });
-    localStorage.setItem('review_history', JSON.stringify(updatedHistory));
+    await storeUserData(token, 'review_history', updatedHistory);
   };
 
-  // Helper function to store fix history
-  const storeFix = (repositoryName: string, fixDetails: any) => {
-    const fixHistory = JSON.parse(localStorage.getItem('fix_history') || '[]');
+  // FIXED: Helper function to store fix history with user-specific data
+  const storeFix = async (repositoryName: string, fixDetails: any, token: string) => {
+    const fixHistory = await getUserData(token, 'fix_history') || [];
     const newFix = {
       repository: repositoryName,
       timestamp: new Date().toISOString(),
       ...fixDetails
     };
     fixHistory.push(newFix);
-    localStorage.setItem('fix_history', JSON.stringify(fixHistory));
+    await storeUserData(token, 'fix_history', fixHistory);
     
     console.log(`Stored fix history for ${repositoryName}:`, newFix);
   };
 
   // CRITICAL: Function to remove a single issue when fixed individually
-  const removeSingleIssue = (repositoryName: string, issueToRemove: any) => {
-    const unresolvedKey = `unresolved_issues_${repositoryName}`;
+  const removeSingleIssue = async (repositoryName: string, issueToRemove: any) => {
+    const token = localStorage.getItem('github_token');
+    if (!token) return [];
+
+    const userId = await getUserIdentifier(token);
+    const unresolvedKey = `${userId}_unresolved_issues_${repositoryName}`;
     const currentIssues = JSON.parse(localStorage.getItem(unresolvedKey) || '[]');
     
     // Remove the specific issue by ID or hash
@@ -411,46 +450,53 @@ export const useGitHubIntegration = () => {
     console.log(`Removed single issue. ${remainingIssues.length} remaining for ${repositoryName}`);
     
     // Store the fix in history
-    storeFix(repositoryName, {
+    await storeFix(repositoryName, {
       issuesFixed: 1,
       filesFixed: [issueToRemove.file],
       singleFix: true,
       fixedIssue: issueToRemove
-    });
+    }, token);
     
     // If no issues remain, mark as completed
     if (remainingIssues.length === 0) {
-      updateReviewCompletion(repositoryName);
+      await updateReviewCompletion(repositoryName, token);
     }
     
     return remainingIssues;
   };
 
   // CRITICAL: Function to clear ALL issues when "Fix All" is used
-  const clearAllIssues = (repositoryName: string, allIssues: any[]) => {
-    const unresolvedKey = `unresolved_issues_${repositoryName}`;
+  const clearAllIssues = async (repositoryName: string, allIssues: any[]) => {
+    const token = localStorage.getItem('github_token');
+    if (!token) return [];
+
+    const userId = await getUserIdentifier(token);
+    const unresolvedKey = `${userId}_unresolved_issues_${repositoryName}`;
     
     // Clear ALL unresolved issues
     localStorage.setItem(unresolvedKey, JSON.stringify([]));
     console.log(`Cleared ALL ${allIssues.length} issues for ${repositoryName}`);
     
     // Store the fix in history
-    storeFix(repositoryName, {
+    await storeFix(repositoryName, {
       issuesFixed: allIssues.length,
       filesFixed: [...new Set(allIssues.map(issue => issue.file))], // Unique files
       allFixed: true,
       fixedIssues: allIssues
-    });
+    }, token);
     
     // Mark as completed
-    updateReviewCompletion(repositoryName);
+    await updateReviewCompletion(repositoryName, token);
     
     return [];
   };
 
   // CRITICAL: Update existing review instead of creating new one
-  const updateExistingReview = (repositoryName: string, newResult: any) => {
-    const reviewHistory = JSON.parse(localStorage.getItem('review_history') || '[]');
+  const updateExistingReview = async (repositoryName: string, newResult: any) => {
+    const token = localStorage.getItem('github_token');
+    if (!token) return null;
+
+    const reviewHistory = await getUserData(token, 'review_history') || [];
     
     // Find existing review for this repository
     const existingIndex = reviewHistory.findIndex((review: any) => review.repository === repositoryName);
@@ -475,7 +521,7 @@ export const useGitHubIntegration = () => {
       console.log(`Created new review for ${repositoryName}`);
     }
     
-    localStorage.setItem('review_history', JSON.stringify(reviewHistory));
+    await storeUserData(token, 'review_history', reviewHistory);
     return reviewHistory[existingIndex !== -1 ? existingIndex : reviewHistory.length - 1];
   };
 
@@ -513,16 +559,16 @@ export const useGitHubIntegration = () => {
 
       // Store unresolved issues for resuming later
       if (result.success && result.issues) {
-        storeUnresolvedIssues(`${owner}/${repo}`, result.issues);
+        await storeUnresolvedIssues(`${owner}/${repo}`, result.issues, token);
       }
 
       // CRITICAL: Update existing review instead of creating new one
       const repositoryName = `${owner}/${repo}`;
-      updateExistingReview(repositoryName, result);
+      await updateExistingReview(repositoryName, result);
 
       // Refresh dashboard data
       const github = new GitHubService(token);
-      await loadDashboardData(github, repositories);
+      await loadDashboardData(github, repositories, token);
 
       return { success: true, result };
     } catch (error) {
@@ -537,11 +583,14 @@ export const useGitHubIntegration = () => {
   // New function to resume a review
   const resumeReview = async (repositoryName: string) => {
     try {
-      const unresolvedIssues = getUnresolvedIssues(repositoryName);
+      const token = localStorage.getItem('github_token');
+      if (!token) throw new Error('No GitHub token found');
+
+      const unresolvedIssues = await getUnresolvedIssues(repositoryName, token);
       
       if (unresolvedIssues.length === 0) {
         // Mark as completed if no issues remain
-        updateReviewCompletion(repositoryName);
+        await updateReviewCompletion(repositoryName, token);
         
         return {
           success: true,
@@ -598,10 +647,10 @@ export const useGitHubIntegration = () => {
         const repositoryName = `${owner}/${repo}`;
         
         // CRITICAL: Clear ALL issues when "Fix All" is used
-        const remainingIssues = clearAllIssues(repositoryName, issues);
+        await clearAllIssues(repositoryName, issues);
         
         // Update review history to reflect completion
-        const reviewHistory = JSON.parse(localStorage.getItem('review_history') || '[]');
+        const reviewHistory = await getUserData(token, 'review_history') || [];
         const updatedHistory = reviewHistory.map((review: any) => {
           if (review.repository === repositoryName) {
             return {
@@ -617,11 +666,11 @@ export const useGitHubIntegration = () => {
           }
           return review;
         });
-        localStorage.setItem('review_history', JSON.stringify(updatedHistory));
+        await storeUserData(token, 'review_history', updatedHistory);
         
         // Refresh dashboard data to update status
         const github = new GitHubService(token);
-        await loadDashboardData(github, repositories);
+        await loadDashboardData(github, repositories, token);
       }
       
       return { success: true, result };
@@ -637,15 +686,19 @@ export const useGitHubIntegration = () => {
   const disconnect = () => {
     localStorage.removeItem('github_token');
     localStorage.removeItem('openai_api_key');
-    localStorage.removeItem('review_history');
-    localStorage.removeItem('fix_history');
     
-    // Clear all unresolved issues
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('unresolved_issues_')) {
-        localStorage.removeItem(key);
-      }
-    });
+    // FIXED: Clear user-specific data only
+    const token = localStorage.getItem('github_token');
+    if (token) {
+      getUserIdentifier(token).then(userId => {
+        // Clear all user-specific keys
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith(`${userId}_`)) {
+            localStorage.removeItem(key);
+          }
+        });
+      });
+    }
     
     setIsConnected(false);
     setRepositories([]);
@@ -690,7 +743,11 @@ export const useGitHubIntegration = () => {
         console.log(`✅ Fetched ${uniqueRepos.length} repositories`);
         
         setRepositories(uniqueRepos);
-        await loadDashboardData(github, uniqueRepos);
+        
+        // FIXED: Store updated repositories with user-specific key
+        await storeUserData(token, 'repositories', uniqueRepos);
+        
+        await loadDashboardData(github, uniqueRepos, token);
         
         console.log('✅ Dashboard data refreshed successfully');
       } catch (error) {
@@ -702,33 +759,44 @@ export const useGitHubIntegration = () => {
     }
   };
 
-  // Check for existing connection on mount
+  // FIXED: Check for existing connection on mount and load user-specific data
   useEffect(() => {
     const token = localStorage.getItem('github_token');
     if (token) {
       setIsConnected(true);
-      // Load repositories and dashboard data
-      const github = new GitHubService(token);
       
-      // Get all repositories (including private ones)
-      Promise.all([
-        github.getRepositories(),
-        github.request('/user/repos?visibility=private&per_page=100').catch(() => [])
-      ])
-        .then(([publicRepos, privateRepos]) => {
-          // Combine and deduplicate repositories
-          const allRepos = [...publicRepos, ...privateRepos];
-          const uniqueRepos = allRepos.filter((repo, index, self) => 
-            index === self.findIndex(r => r.id === repo.id)
-          );
+      // Load user-specific repositories first
+      getUserData(token, 'repositories').then(savedRepos => {
+        if (savedRepos && savedRepos.length > 0) {
+          setRepositories(savedRepos);
           
-          setRepositories(uniqueRepos);
-          return loadDashboardData(github, uniqueRepos);
-        })
-        .catch(error => {
-          console.error('Failed to load initial data:', error);
-          setError('Failed to load GitHub data');
-        });
+          // Load dashboard data with saved repositories
+          const github = new GitHubService(token);
+          loadDashboardData(github, savedRepos, token);
+        } else {
+          // If no saved repositories, fetch fresh data
+          const github = new GitHubService(token);
+          
+          Promise.all([
+            github.getRepositories(),
+            github.request('/user/repos?visibility=private&per_page=100').catch(() => [])
+          ])
+            .then(([publicRepos, privateRepos]) => {
+              const allRepos = [...publicRepos, ...privateRepos];
+              const uniqueRepos = allRepos.filter((repo, index, self) => 
+                index === self.findIndex(r => r.id === repo.id)
+              );
+              
+              setRepositories(uniqueRepos);
+              storeUserData(token, 'repositories', uniqueRepos);
+              return loadDashboardData(github, uniqueRepos, token);
+            })
+            .catch(error => {
+              console.error('Failed to load initial data:', error);
+              setError('Failed to load GitHub data');
+            });
+        }
+      });
     }
   }, []);
 
