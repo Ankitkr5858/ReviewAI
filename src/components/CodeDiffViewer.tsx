@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, CheckCircle, Info, Copy, ExternalLink } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, Copy, ExternalLink, MessageSquare } from 'lucide-react';
+import PRCommentSystem from './PRCommentSystem';
 
 interface CodeIssue {
   type: 'error' | 'warning' | 'info';
@@ -19,10 +20,14 @@ interface CodeIssue {
 
 interface CodeDiffViewerProps {
   issue: CodeIssue;
-  onApplyFix?: ((issue: CodeIssue) => Promise<void>) | null;
+  onApplyFix?: ((issue: CodeIssue) => Promise<void>) | null; 
 }
 
 const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) => {
+  const [showCommentLeft, setShowCommentLeft] = React.useState(false);
+  const [showCommentRight, setShowCommentRight] = React.useState(false);
+  const [showCommentSingle, setShowCommentSingle] = React.useState(false);
+
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'high':
@@ -51,6 +56,22 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+  };
+  
+  const handleCommentClick = (side: 'left' | 'right' | 'single') => {
+    if (side === 'left') {
+      setShowCommentLeft(true);
+      setShowCommentRight(false);
+      setShowCommentSingle(false);
+    } else if (side === 'right') {
+      setShowCommentLeft(false);
+      setShowCommentRight(true);
+      setShowCommentSingle(false);
+    } else {
+      setShowCommentLeft(false);
+      setShowCommentRight(false);
+      setShowCommentSingle(true);
+    }
   };
 
   // FIXED: Highlight changes in code with light background colors and better contrast
@@ -149,34 +170,63 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
       {/* Code Diff with IMPROVED HIGHLIGHTING */}
       {issue.originalCode && issue.suggestedCode && (
         <div className="grid grid-cols-1 lg:grid-cols-2">
-          {/* Original Code */}
+          {/* Original Code (Left Side) */}
           <div className="border-r border-gray-200">
             <div className="bg-red-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
               <span className="text-sm font-medium text-red-700">Current Code</span>
-              <button
-                onClick={() => copyToClipboard(issue.originalCode!)}
-                className="p-1 hover:bg-red-100 rounded transition-colors"
-              >
-                <Copy size={14} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleCommentClick('left')}
+                  className="p-1 hover:bg-red-100 rounded transition-colors"
+                  title="Comment on this code"
+                >
+                  <MessageSquare size={14} className="text-red-700" />
+                </button>
+                <button
+                  onClick={() => copyToClipboard(issue.originalCode!)}
+                  className="p-1 hover:bg-red-100 rounded transition-colors"
+                >
+                  <Copy size={14} />
+                </button>
+              </div>
             </div>
             <div className="p-0 font-mono text-sm overflow-x-auto">
               <pre className="whitespace-pre-wrap">
-                <code 
-                  className="text-red-800 flex flex-col"
-                  dangerouslySetInnerHTML={{ 
-                    __html: highlightChanges(issue.originalCode, issue.suggestedCode).original 
-                  }}
-                />
+                <div className="relative group">
+                  <code 
+                    className="text-red-800 flex flex-col"
+                    dangerouslySetInnerHTML={{ 
+                      __html: highlightChanges(issue.originalCode, issue.suggestedCode).original 
+                    }}
+                  />
+                </div>
               </pre>
             </div>
+            
+            {/* Inline Comment System for Left Side */}
+            {showCommentLeft && (
+              <PRCommentSystem
+                isOpen={true}
+                onClose={() => setShowCommentLeft(false)}
+                fileName={issue.file}
+                lineNumber={issue.line}
+                lineContent={issue.originalCode!}
+              />
+            )}
           </div>
 
-          {/* Suggested Code with LIGHTER GREEN highlighting */}
+          {/* Suggested Code (Right Side) */}
           <div>
             <div className="bg-green-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
               <span className="text-sm font-medium text-green-700">Suggested Fix</span>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleCommentClick('right')}
+                  className="p-1 hover:bg-green-100 rounded transition-colors"
+                  title="Comment on this code"
+                >
+                  <MessageSquare size={14} className="text-green-700" />
+                </button>
                 <button
                   onClick={() => copyToClipboard(issue.suggestedCode!)}
                   className="p-1 hover:bg-green-100 rounded transition-colors"
@@ -187,14 +237,27 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
             </div>
             <div className="p-0 font-mono text-sm overflow-x-auto">
               <pre className="whitespace-pre-wrap">
-                <code 
-                  className="text-green-800 flex flex-col"
-                  dangerouslySetInnerHTML={{ 
-                    __html: highlightChanges(issue.originalCode, issue.suggestedCode).suggested 
-                  }}
-                />
+                <div className="relative group">
+                  <code 
+                    className="text-green-800 flex flex-col"
+                    dangerouslySetInnerHTML={{ 
+                      __html: highlightChanges(issue.originalCode, issue.suggestedCode).suggested 
+                    }}
+                  />
+                </div>
               </pre>
             </div>
+            
+            {/* Inline Comment System for Right Side */}
+            {showCommentRight && (
+              <PRCommentSystem
+                isOpen={true}
+                onClose={() => setShowCommentRight(false)}
+                fileName={issue.file}
+                lineNumber={issue.line}
+                lineContent={issue.suggestedCode!}
+              />
+            )}
           </div>
         </div>
       )}
@@ -204,18 +267,40 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
         <div>
           <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
             <span className="text-sm font-medium text-gray-700">Code at Line {issue.line}</span>
-            <button
-              onClick={() => copyToClipboard(issue.originalCode!)}
-              className="p-1 hover:bg-gray-100 rounded transition-colors"
-            >
-              <Copy size={14} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleCommentClick('single')}
+                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                title="Comment on this code"
+              >
+                <MessageSquare size={14} className="text-gray-700" />
+              </button>
+              <button
+                onClick={() => copyToClipboard(issue.originalCode!)}
+                className="p-1 hover:bg-gray-100 rounded transition-colors"
+              >
+                <Copy size={14} />
+              </button>
+            </div>
           </div>
           <div className="p-4 font-mono text-sm overflow-x-auto bg-gray-25">
             <pre className="whitespace-pre-wrap">
-              <code className="text-gray-800">{issue.originalCode}</code>
+              <div className="relative group">
+                <code className="text-gray-800">{issue.originalCode}</code>
+              </div>
             </pre>
           </div>
+          
+          {/* Inline Comment System for Single Code Block */}
+          {showCommentSingle && (
+            <PRCommentSystem
+              isOpen={true}
+              onClose={() => setShowCommentSingle(false)}
+              fileName={issue.file}
+              lineNumber={issue.line}
+              lineContent={issue.originalCode!}
+            />
+          )}
         </div>
       )}
     </motion.div>

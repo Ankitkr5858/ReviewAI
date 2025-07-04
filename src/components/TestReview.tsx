@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wand2, GitBranch, AlertCircle, AlertTriangle, CheckCircle, Clock, Settings, Eye, RefreshCw, FileText, ExternalLink, ChevronDown, Plus, Minus, Code, GitMerge, Undo2, Search, TrendingUp, Shield, Zap, BarChart3, Bot, ArrowRight } from 'lucide-react';
+import { Wand2, GitBranch, AlertCircle, AlertTriangle, CheckCircle, Clock, Settings, Eye, RefreshCw, FileText, ExternalLink, ChevronDown, Plus, Minus, Code, GitMerge, Undo2, Search, TrendingUp, Shield, Zap, BarChart3, Bot, ArrowRight, MessageSquare } from 'lucide-react';
 import { useGitHubIntegration } from '../hooks/useGitHubIntegration';
 import { useNavigate, useLocation } from 'react-router-dom';
 import IssueDetailModal from './IssueDetailModal';
 import CommitSuccessModal from './CommitSuccessModal';
 import ConfirmationModal from './ConfirmationModal';
 import SubscriptionModal from './SubscriptionModal';
+import PRCommentSystem from './PRCommentSystem';
+import PRLineComment from './PRLineComment';
 import Header from './Header';
 
 interface CodeIssue {
@@ -89,6 +91,12 @@ interface ImprovementSuggestion {
   afterCode?: string;
 }
 
+interface LineComment {
+  fileName: string;
+  lineNumber: number;
+  lineContent: string;
+}
+
 const TestReview: React.FC = () => {
   const [selectedRepo, setSelectedRepo] = useState('');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -106,6 +114,10 @@ const TestReview: React.FC = () => {
   const [confirmationAction, setConfirmationAction] = useState<'all' | 'ai-merge' | 'manual-merge' | 'revert' | 'improve' | null>(null);
   const [isResuming, setIsResuming] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  
+  // NEW: PR Comment System
+  const [showCommentSystem, setShowCommentSystem] = useState(false);
+  const [currentLineComment, setCurrentLineComment] = useState<LineComment | null>(null);
   
   // NEW: Enhanced PR and Branch features
   const [availablePRs, setAvailablePRs] = useState<PullRequest[]>([]);
@@ -180,6 +192,12 @@ const TestReview: React.FC = () => {
   ]);
   const [selectedImprovements, setSelectedImprovements] = useState<Set<string>>(new Set());
   const [applyingImprovements, setApplyingImprovements] = useState(false);
+  
+  // Additional PR Comment System state
+  const [commentLineNumber, setCommentLineNumber] = useState<number | undefined>(undefined);
+  const [commentFileName, setCommentFileName] = useState<string | undefined>(undefined);
+  const [commentLineContent, setCommentLineContent] = useState<string | undefined>(undefined);
+  const [showLineComment, setShowLineComment] = useState(false);
   
   const { repositories, startReview, resumeReview, fixIssuesWithAI, removeSingleIssue, clearAllIssues, loading } = useGitHubIntegration();
   const navigate = useNavigate();
@@ -914,6 +932,24 @@ Automated revert by ReviewAI • https://reviewai.com`,
     setExpandedFiles(newExpanded);
   };
 
+  // Handle opening comment system for a specific line
+  const handleLineComment = (filename: string, lineNumber: number, lineContent: string) => {
+    setCommentFileName(filename);
+    setCommentLineNumber(lineNumber);
+    setCommentLineContent(lineContent);
+    setShowLineComment(true);
+  };
+
+  // Handle submitting a comment
+  const handleSubmitComment = (comment: string) => {
+    // In a real implementation, this would send the comment to the server
+    console.log(`Comment on ${commentFileName}:${commentLineNumber}: ${comment}`);
+    
+    // Close the line comment form and open the chat system
+    setShowLineComment(false);
+    setShowCommentSystem(true);
+  };
+
   const formatPatchLine = (line: string) => {
     if (line.startsWith('+')) {
       return { type: 'addition', content: line.substring(1) };
@@ -926,6 +962,16 @@ Automated revert by ReviewAI • https://reviewai.com`,
     } else {
       return { type: 'meta', content: line };
     }
+  };
+
+  // NEW: Handle line comment click
+  const handleLineCommentClick = (fileName: string, lineNumber: number, lineContent: string) => {
+    setCurrentLineComment({
+      fileName,
+      lineNumber,
+      lineContent
+    });
+    setShowCommentSystem(true);
   };
 
   // CRITICAL: Filter out info-level issues from display
@@ -1719,7 +1765,7 @@ Automated revert by ReviewAI • https://reviewai.com`,
                       </div>
                     </motion.div>
                     
-                    {/* Expandable Diff Content with GitHub-style line numbers */}
+                    {/* Expandable Diff Content with GitHub-style line numbers and comment buttons */}
                     <AnimatePresence>
                       {expandedFiles.has(fileChange.filename) && fileChange.patch && (
                         <motion.div
@@ -1739,6 +1785,18 @@ Automated revert by ReviewAI • https://reviewai.com`,
                                 const formatted = formatPatchLine(line);
                                 let lineNumber = '';
                                 
+                                // Extract actual line number for comments
+                                let actualLineNumber = 0;
+                                if (formatted.type === 'hunk') {
+                                  const match = line.match(/@@ -\d+,\d+ \+(\d+),\d+ @@/);
+                                  if (match) {
+                                    actualLineNumber = parseInt(match[1]);
+                                  }
+                                } else if (formatted.type === 'addition' || formatted.type === 'context') {
+                                  // For additions and context lines, increment the line number
+                                  actualLineNumber = lineIndex;
+                                }
+                                
                                 // Extract line numbers from hunk headers
                                 if (formatted.type === 'hunk') {
                                   const match = line.match(/@@ -(\d+),\d+ \+(\d+),\d+ @@/);
@@ -1750,7 +1808,7 @@ Automated revert by ReviewAI • https://reviewai.com`,
                                 return (
                                   <div
                                     key={lineIndex}
-                                    className={`flex ${
+                                    className={`flex group ${
                                       formatted.type === 'addition'
                                         ? 'bg-green-900/20 border-l-4 border-green-500'
                                         : formatted.type === 'deletion'
@@ -1760,6 +1818,41 @@ Automated revert by ReviewAI • https://reviewai.com`,
                                         : ''
                                     }`}
                                   >
+                                    {/* Comment button - visible on hover for additions and context */}
+                                    {(formatted.type === 'addition' || formatted.type === 'context') && (
+                                      <div className="w-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            // Get actual line number from hunk header
+                                            let actualLineNumber = 0;
+                                            if (formatted.type === 'addition') {
+                                              // For additions, we need to calculate the actual line number
+                                              const hunkMatch = fileChange.patch.match(/@@ -\d+,\d+ \+(\d+),\d+ @@/);
+                                              if (hunkMatch) {
+                                                const hunkStart = parseInt(hunkMatch[1]);
+                                                // Count additions and context lines before this one
+                                                const lines = fileChange.patch.split('\n').slice(0, lineIndex);
+                                                const additionsAndContextCount = lines.filter(l => 
+                                                  l.startsWith('+') && !l.startsWith('+++') || 
+                                                  l.startsWith(' ')
+                                                ).length;
+                                                actualLineNumber = hunkStart + additionsAndContextCount - 1;
+                                              }
+                                            }
+                                            handleLineCommentClick(
+                                              fileChange.filename, 
+                                              actualLineNumber || lineIndex, 
+                                              formatted.content
+                                            );
+                                          }}
+                                          className="p-1 hover:bg-gray-700 rounded transition-colors"
+                                        >
+                                          <MessageSquare size={14} className="text-gray-400 hover:text-white" />
+                                        </button>
+                                      </div>
+                                    )}
+                                    
                                     {/* Line number column */}
                                     <div className="w-12 text-right pr-2 select-none text-gray-500 text-xs border-r border-gray-700 mr-3 py-1">
                                       {formatted.type === 'hunk' ? lineNumber : lineIndex + 1}
@@ -1775,17 +1868,34 @@ Automated revert by ReviewAI • https://reviewai.com`,
                                     {/* Line content */}
                                     <div className={`py-1 ${
                                       formatted.type === 'addition'
-                                        ? 'text-green-200'
+                                        ? 'text-green-200 flex-1'
                                         : formatted.type === 'deletion'
-                                        ? 'text-red-200'
+                                        ? 'text-red-200 flex-1'
                                         : formatted.type === 'hunk'
-                                        ? 'text-blue-200 font-semibold'
+                                        ? 'text-blue-200 font-semibold flex-1'
                                         : formatted.type === 'meta'
-                                        ? 'text-gray-500'
-                                        : 'text-gray-300'
+                                        ? 'text-gray-500 flex-1'
+                                        : 'text-gray-300 flex-1'
                                     }`}>
                                       {formatted.content}
                                     </div>
+                                    
+                                    {/* Comment button - only for additions and context lines */}
+                                    {(formatted.type === 'addition' || formatted.type === 'context') && (
+                                      <div className="opacity-0 group-hover:opacity-100 transition-opacity pr-2">
+                                        <button
+                                          onClick={() => handleLineComment(
+                                            fileChange.filename,
+                                            actualLineNumber,
+                                            formatted.content
+                                          )}
+                                          className="p-1 hover:bg-gray-700 rounded transition-colors"
+                                          title="Comment on this line"
+                                        >
+                                          <MessageSquare size={14} className="text-gray-400 hover:text-white" />
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })}
@@ -2060,6 +2170,20 @@ Automated revert by ReviewAI • https://reviewai.com`,
         )}
       </AnimatePresence>
 
+      {/* PR Comment System */}
+      <AnimatePresence>
+        {showCommentSystem && currentLineComment && (
+          <PRCommentSystem
+            isOpen={showCommentSystem}
+            onClose={() => setShowCommentSystem(false)}
+            lineNumber={currentLineComment.lineNumber}
+            fileName={currentLineComment.fileName}
+            lineContent={currentLineComment.lineContent}
+            repositoryName={selectedRepo}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Enhanced Confirmation Modal - Handles all confirmation types */}
       <AnimatePresence>
         {showConfirmation && (
@@ -2160,6 +2284,31 @@ This action cannot be undone.` :
           />
         )}
       </AnimatePresence>
+
+      {/* PR Line Comment Form */}
+      <AnimatePresence>
+        {showLineComment && commentFileName && commentLineNumber !== undefined && commentLineContent && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <PRLineComment
+              fileName={commentFileName}
+              lineNumber={commentLineNumber}
+              lineContent={commentLineContent}
+              onComment={handleSubmitComment}
+              onCancel={() => setShowLineComment(false)}
+            />
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* PR Comment System */}
+      <PRCommentSystem
+        isOpen={showCommentSystem}
+        onClose={() => setShowCommentSystem(false)}
+        lineNumber={commentLineNumber}
+        fileName={commentFileName}
+        lineContent={commentLineContent}
+        repositoryName={selectedRepo}
+      />
 
       {/* Subscription Modal */}
       <AnimatePresence>
