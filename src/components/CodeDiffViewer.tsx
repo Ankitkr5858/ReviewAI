@@ -53,7 +53,7 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
     navigator.clipboard.writeText(text);
   };
 
-  // FIXED: Highlight changes in code with dark green background
+  // FIXED: Highlight changes in code with light background colors and better contrast
   const highlightChanges = (originalCode: string, suggestedCode: string) => {
     // Simple diff highlighting - mark changed parts
     const original = originalCode.trim();
@@ -66,34 +66,34 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
       // Highlight spacing changes
       if (issue.rule?.includes('operator-spacing')) {
         const highlighted = suggested.replace(/(\w+)\s+([=+\-*/])\s+(\w+)/g, 
-          '$1<span class="bg-green-800 text-white px-1 rounded"> $2 </span>$3'
+          '$1<span class="bg-green-100 text-green-800 px-1 rounded"> $2 </span>$3'
         );
         return { 
-          original: original.replace(/(\w+)([=+\-*/])(\w+)/g, '$1<span class="bg-red-200 px-1 rounded">$2</span>$3'),
+          original: original.replace(/(\w+)([=+\-*/])(\w+)/g, '$1<span class="bg-red-100 px-1 rounded">$2</span>$3'),
           suggested: highlighted 
         };
       }
       
       // Highlight quote changes
       if (issue.rule?.includes('quotes')) {
-        const highlighted = suggested.replace(/'/g, '<span class="bg-green-800 text-white px-1 rounded">\'</span>');
+        const highlighted = suggested.replace(/'/g, '<span class="bg-green-100 text-green-800 px-1 rounded">\'</span>');
         return { 
-          original: original.replace(/"/g, '<span class="bg-red-200 px-1 rounded">"</span>'),
+          original: original.replace(/"/g, '<span class="bg-red-100 px-1 rounded">"</span>'),
           suggested: highlighted 
         };
       }
       
       // Highlight trailing comma
       if (issue.rule?.includes('trailing-comma')) {
-        const highlighted = suggested.replace(/,(\s*)$/, '<span class="bg-green-800 text-white px-1 rounded">,</span>$1');
+        const highlighted = suggested.replace(/,(\s*)$/, '<span class="bg-green-100 text-green-800 px-1 rounded">,</span>$1');
         return { original, suggested: highlighted };
       }
     }
     
     // For other changes, highlight the entire difference
     return { 
-      original: `<span class="bg-red-200 px-1 rounded">${original}</span>`,
-      suggested: `<span class="bg-green-800 text-white px-1 rounded">${suggested}</span>`
+      original: `<span class="bg-red-100 px-1 rounded">${original}</span>`,
+      suggested: `<span class="bg-green-100 text-green-800 px-1 rounded">${suggested}</span>`
     };
   };
 
@@ -146,7 +146,7 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
         </div>
       </div>
 
-      {/* Code Diff with HIGHLIGHTED CHANGES */}
+      {/* Code Diff with IMPROVED HIGHLIGHTING */}
       {issue.originalCode && issue.suggestedCode && (
         <div className="grid grid-cols-1 lg:grid-cols-2">
           {/* Original Code */}
@@ -160,10 +160,10 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
                 <Copy size={14} />
               </button>
             </div>
-            <div className="p-4 bg-red-25 font-mono text-sm overflow-x-auto">
+            <div className="p-0 font-mono text-sm overflow-x-auto">
               <pre className="whitespace-pre-wrap">
                 <code 
-                  className="text-red-800"
+                  className="text-red-800 flex flex-col"
                   dangerouslySetInnerHTML={{ 
                     __html: highlightChanges(issue.originalCode, issue.suggestedCode).original 
                   }}
@@ -172,7 +172,7 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
             </div>
           </div>
 
-          {/* Suggested Code with DARK GREEN highlighting */}
+          {/* Suggested Code with LIGHTER GREEN highlighting */}
           <div>
             <div className="bg-green-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
               <span className="text-sm font-medium text-green-700">Suggested Fix</span>
@@ -185,10 +185,10 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
                 </button>
               </div>
             </div>
-            <div className="p-4 bg-green-25 font-mono text-sm overflow-x-auto">
+            <div className="p-0 font-mono text-sm overflow-x-auto">
               <pre className="whitespace-pre-wrap">
                 <code 
-                  className="text-green-800"
+                  className="text-green-800 flex flex-col"
                   dangerouslySetInnerHTML={{ 
                     __html: highlightChanges(issue.originalCode, issue.suggestedCode).suggested 
                   }}

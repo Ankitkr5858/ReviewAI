@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, Wand2, User, LogOut, Settings, ChevronDown, Home, GitBranch, Play } from 'lucide-react';
+import { Menu, Wand2, User, LogOut, Settings, ChevronDown, Home, GitBranch } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useGitHubIntegration } from '../hooks/useGitHubIntegration';
@@ -78,7 +78,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
   const navigationItems = [
     { path: '/dashboard', label: 'Dashboard', icon: Home },
     { path: '/repositories', label: 'Repositories', icon: GitBranch },
-    { path: '/test', label: 'Test Review', icon: Play },
+    { path: '/test', label: 'Review Code', icon: Wand2 },
   ];
 
   const isActivePath = (path: string) => {
@@ -256,7 +256,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
                               handleNavigation(item.path);
                               setShowUserMenu(false);
                             }}
-                            className={`w-full flex items-center gap-3 px-3 py-2 text-left rounded-lg transition-colors ${
+                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left cursor-pointer ${
                               isActivePath(item.path)
                                 ? 'bg-blue-50 text-blue-600'
                                 : 'hover:bg-gray-100 text-gray-700'
