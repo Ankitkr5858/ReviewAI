@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wand2, GitBranch, AlertCircle, AlertTriangle, CheckCircle, Clock, Settings, Eye, RefreshCw, FileText, ExternalLink, ChevronDown, Plus, Minus, Code, GitMerge, Undo2, Search, TrendingUp, Shield, Zap, BarChart3, Bot, ArrowRight } from 'lucide-react';
+import { Wand2, GitBranch, AlertCircle, AlertTriangle, CheckCircle, Clock, Settings, Eye, RefreshCw, FileText, ExternalLink, ChevronDown, Plus, Minus, Code, GitMerge, Undo2, Search, TrendingUp, Shield, Zap, BarChart3, Bot, ArrowRight, MessageCircle, Send, User } from 'lucide-react';
 import { useGitHubIntegration } from '../hooks/useGitHubIntegration';
 import { useNavigate, useLocation } from 'react-router-dom';
 import IssueDetailModal from './IssueDetailModal';
@@ -87,6 +87,15 @@ interface ImprovementSuggestion {
   difficulty: 'easy' | 'medium' | 'hard';
   beforeCode?: string;
   afterCode?: string;
+}
+
+interface ChatMessage {
+  id: string;
+  sender: 'user' | 'bot';
+  text: string;
+  timestamp: Date;
+  file?: string;
+  line?: number;
 }
 
 const TestReview: React.FC = () => {
@@ -181,6 +190,14 @@ const TestReview: React.FC = () => {
   const [selectedImprovements, setSelectedImprovements] = useState<Set<string>>(new Set());
   const [applyingImprovements, setApplyingImprovements] = useState(false);
   
+  // NEW: Chat functionality
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [showChatPanel, setShowChatPanel] = useState(false);
+  const [commentingLine, setCommentingLine] = useState<{file: string, line: number, issue?: CodeIssue} | null>(null);
+  const chatEndRef = React.useRef<HTMLDivElement>(null);
+  
   const { repositories, startReview, resumeReview, fixIssuesWithAI, removeSingleIssue, clearAllIssues, loading } = useGitHubIntegration();
   const navigate = useNavigate();
   const location = useLocation();
@@ -250,6 +267,13 @@ const TestReview: React.FC = () => {
       }
     }
   }, [reviewResult, reviewType, pullNumber, mergeStatus]);
+
+  // Scroll to bottom of chat when new messages arrive
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages, isTyping]);
 
   // FIXED: Filter repositories based on search term
   const filteredRepositories = repositories.filter(repo =>
@@ -864,6 +888,154 @@ Automated revert by ReviewAI • https://reviewai.com`,
       setShowConfirmation(false);
       setConfirmationAction(null);
     }
+  };
+
+  // NEW: Handle line comment
+  const handleLineComment = (file: string, line: number, issue?: CodeIssue) => {
+    setCommentingLine({ file, line, issue });
+    setShowChatPanel(true);
+    
+    // Add initial bot message
+    const initialMessage: ChatMessage = {
+      id: `bot-${Date.now()}`,
+      sender: 'bot',
+      text: `I see you're looking at line ${line} in ${file}${issue ? ` which has a ${issue.severity} ${issue.category || 'code'} issue: "${issue.message}"` : ''}. How can I help you with this?`,
+      timestamp: new Date(),
+      file,
+      line
+    };
+    
+    setChatMessages([initialMessage]);
+  };
+
+  // NEW: Generate intelligent response based on user message and context
+  const generateIntelligentResponse = (userMessage: string, context?: {file?: string, line?: number, issue?: CodeIssue}): string => {
+    const lowerMessage = userMessage.toLowerCase();
+    
+    // If we have an issue context, use it for more specific responses
+    if (context?.issue) {
+      const { file, line, issue } = context;
+      const { message, severity, category, rule, suggestion, originalCode, suggestedCode } = issue;
+      
+      // Specific responses based on issue type and user question
+      if (lowerMessage.includes('why') && (lowerMessage.includes('important') || lowerMessage.includes('matter'))) {
+        if (category === 'security') {
+          return `This ${severity} security issue is critical because it could expose your application to attacks. Specifically, "${message}" can lead to vulnerabilities like XSS, injection attacks, or data breaches. Security issues should always be fixed immediately to protect your users and data.`;
+        } else if (category === 'performance') {
+          return `This performance issue matters because it can slow down your application and create a poor user experience. "${message}" can cause your app to use more memory, CPU, or network resources than necessary. Fixing it will make your app faster and more responsive.`;
+        } else if (rule?.includes('semi')) {
+          return `Missing semicolons matter because JavaScript's Automatic Semicolon Insertion (ASI) can cause unexpected behavior. When code is minified or certain patterns are used, missing semicolons can break your application or cause subtle bugs that are hard to debug.`;
+        } else if (category === 'eslint') {
+          return `This ESLint rule helps maintain code quality and consistency. "${message}" ensures your code follows best practices, making it more readable, maintainable, and less prone to bugs. Following these rules helps your team write better code together.`;
+        } else {
+          return `This ${severity} issue is important because it affects code quality and maintainability. "${message}" can lead to bugs, make your code harder to understand, or cause problems in production. Fixing it will improve your codebase overall.`;
+        }
+      }
+
+      if (lowerMessage.includes('how') && (lowerMessage.includes('fix') || lowerMessage.includes('solve'))) {
+        if (originalCode && suggestedCode) {
+          return `To fix this issue, I need to change:\n\n**Current code:** \`${originalCode.trim()}\`\n**Fixed code:** \`${suggestedCode.trim()}\`\n\n${suggestion || 'This change follows coding best practices.'} I can apply this fix automatically by creating a commit to your repository. Would you like me to do that?`;
+        } else if (suggestion) {
+          return `Here's how to fix this issue: ${suggestion}. The specific problem is "${message}" in ${file} at line ${line}. ${rule ? `This follows the ${rule} rule.` : ''} I can help you apply this fix automatically if you'd like.`;
+        } else {
+          return `To fix "${message}", you'll need to modify the code at ${file}:${line}. This is a ${severity} ${category || 'code quality'} issue that should be addressed to improve your codebase. I can apply an automatic fix if you click the "Apply AI Fix" button below.`;
+        }
+      }
+
+      if (lowerMessage.includes('break') && lowerMessage.includes('code')) {
+        return `No, this fix won't break your existing code! The suggested change is safe and follows best practices. ${originalCode && suggestedCode ? `I'm only changing "${originalCode.trim()}" to "${suggestedCode.trim()}"` : 'The fix addresses the specific issue without affecting other functionality'}. This type of ${category || 'code quality'} fix is designed to improve your code while maintaining its behavior.`;
+      }
+    }
+    
+    // General responses for code questions
+    if (lowerMessage.includes('explain') || lowerMessage.includes('what')) {
+      if (context?.file && context?.line) {
+        return `Line ${context.line} in ${context.file} ${context.issue ? `has a ${context.issue.severity} issue: "${context.issue.message}". ${context.issue.suggestion || 'This should be fixed to improve code quality.'}` : 'is part of your code that I can help analyze. Would you like me to explain what this code does or suggest improvements?'}`;
+      } else {
+        return `I'd be happy to explain this code to you. Could you specify which part you'd like me to focus on? I can help with understanding the logic, identifying potential issues, or suggesting improvements.`;
+      }
+    }
+
+    if (lowerMessage.includes('best practice') || lowerMessage.includes('standard')) {
+      return `Following coding best practices is important for maintainability, readability, and preventing bugs. Some key best practices include:
+
+1. Consistent formatting (using tools like Prettier)
+2. Following language-specific conventions (like ESLint rules)
+3. Writing descriptive variable and function names
+4. Adding appropriate comments and documentation
+5. Handling errors properly
+6. Writing testable code
+
+Would you like me to suggest specific best practices for your code?`;
+    }
+
+    if (lowerMessage.includes('security') || lowerMessage.includes('vulnerable')) {
+      return `Security is critical in modern applications. Common security issues include:
+
+1. XSS (Cross-Site Scripting) - Using innerHTML with user input
+2. SQL Injection - Concatenating user input into queries
+3. CSRF (Cross-Site Request Forgery) - Not using proper tokens
+4. Insecure authentication - Weak password handling
+5. Sensitive data exposure - Logging credentials or tokens
+
+I can help identify and fix security vulnerabilities in your code. Would you like me to focus on security issues?`;
+    }
+
+    if (lowerMessage.includes('performance') || lowerMessage.includes('slow')) {
+      return `Performance optimization is important for user experience. Common performance issues include:
+
+1. Inefficient loops - Not caching array lengths
+2. DOM manipulation - Excessive reflows and repaints
+3. Memory leaks - Not cleaning up event listeners or references
+4. Large bundle sizes - Not code-splitting or tree-shaking
+5. Unoptimized images or assets
+
+I can help identify performance bottlenecks and suggest optimizations. Would you like specific performance advice?`;
+    }
+
+    // Default response
+    return `I understand you're asking about ${context?.file ? `code in ${context.file}` : 'your code'}. I'm here to help with code reviews, explaining issues, suggesting fixes, and answering questions about best practices. Could you provide more details about what you'd like to know?`;
+  };
+
+  // NEW: Handle sending chat message
+  const handleSendMessage = () => {
+    if (!newMessage.trim()) return;
+    
+    // Add user message
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      sender: 'user',
+      text: newMessage,
+      timestamp: new Date(),
+      file: commentingLine?.file,
+      line: commentingLine?.line
+    };
+    
+    setChatMessages(prev => [...prev, userMessage]);
+    const currentMessage = newMessage;
+    setNewMessage('');
+    setIsTyping(true);
+    
+    // Simulate typing delay and generate intelligent response
+    setTimeout(() => {
+      const botResponse = generateIntelligentResponse(currentMessage, {
+        file: commentingLine?.file,
+        line: commentingLine?.line,
+        issue: commentingLine?.issue
+      });
+      
+      const botMessage: ChatMessage = {
+        id: `bot-${Date.now()}`,
+        sender: 'bot',
+        text: botResponse,
+        timestamp: new Date(),
+        file: commentingLine?.file,
+        line: commentingLine?.line
+      };
+      
+      setChatMessages(prev => [...prev, botMessage]);
+      setIsTyping(false);
+    }, 1500);
   };
 
   const getSeverityColor = (severity: string) => {
@@ -1773,7 +1945,7 @@ Automated revert by ReviewAI • https://reviewai.com`,
                                     </div>
                                     
                                     {/* Line content */}
-                                    <div className={`py-1 ${
+                                    <div className={`py-1 flex-1 ${
                                       formatted.type === 'addition'
                                         ? 'text-green-200'
                                         : formatted.type === 'deletion'
@@ -1785,6 +1957,23 @@ Automated revert by ReviewAI • https://reviewai.com`,
                                         : 'text-gray-300'
                                     }`}>
                                       {formatted.content}
+                                    </div>
+                                    
+                                    {/* Comment button */}
+                                    <div className="w-8 flex items-center justify-center">
+                                      {(formatted.type === 'addition' || formatted.type === 'context') && (
+                                        <motion.button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleLineComment(fileChange.filename, lineIndex + 1);
+                                          }}
+                                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-700 rounded transition-colors"
+                                          whileHover={{ scale: 1.1 }}
+                                          whileTap={{ scale: 0.9 }}
+                                        >
+                                          <MessageCircle size={14} className="text-gray-400 hover:text-white" />
+                                        </motion.button>
+                                      )}
                                     </div>
                                   </div>
                                 );
@@ -1832,7 +2021,7 @@ Automated revert by ReviewAI • https://reviewai.com`,
                       {fileIssues.map((issue: CodeIssue, index: number) => (
                         <motion.div
                           key={issue.id || index}
-                          className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                          className="p-4 cursor-pointer hover:bg-gray-50 transition-colors group"
                           onClick={() => setSelectedIssue(issue)}
                           whileHover={{ 
                             scale: 1.01, 
@@ -1850,6 +2039,18 @@ Automated revert by ReviewAI • https://reviewai.com`,
                                 {issue.rule && (
                                   <span className="text-xs text-gray-500">({issue.rule})</span>
                                 )}
+                                {/* Add comment button */}
+                                <motion.button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleLineComment(issue.file, issue.line, issue);
+                                  }}
+                                  className="p-1 hover:bg-gray-100 rounded transition-colors opacity-0 group-hover:opacity-100"
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                >
+                                  <MessageCircle size={14} className="text-gray-500" />
+                                </motion.button>
                               </div>
                               <p className="text-sm text-gray-900 mb-1">{issue.message}</p>
                               {issue.suggestion && (
@@ -2046,6 +2247,156 @@ Automated revert by ReviewAI • https://reviewai.com`,
           </motion.div>
         </div>
       </div>
+
+      {/* Chat Panel */}
+      <AnimatePresence>
+        {showChatPanel && (
+          <motion.div
+            className="fixed bottom-0 right-6 w-96 bg-white rounded-t-xl shadow-xl border border-gray-200 z-40"
+            initial={{ y: 400, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 400, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+          >
+            {/* Chat Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-4 rounded-t-xl flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1 bg-white/20 rounded-lg">
+                  <Wand2 size={18} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-white">ReviewAI Chat</h3>
+                  <div className="flex items-center gap-1 text-xs text-white/80">
+                    <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                    <span>Online</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowChatPanel(false)}
+                className="p-1 hover:bg-white/20 rounded transition-colors"
+              >
+                <X size={18} className="text-white" />
+              </button>
+            </div>
+            
+            {/* Chat Context */}
+            {commentingLine && (
+              <div className="bg-blue-50 p-3 border-b border-blue-200">
+                <div className="flex items-center gap-2 text-sm text-blue-800">
+                  <FileText size={14} className="text-blue-600" />
+                  <span className="font-medium">{commentingLine.file}:{commentingLine.line}</span>
+                </div>
+                {commentingLine.issue && (
+                  <div className="mt-1 text-xs text-blue-700">
+                    Issue: {commentingLine.issue.message}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Chat Messages */}
+            <div className="h-80 overflow-y-auto p-4 bg-gray-50">
+              <div className="space-y-4">
+                {chatMessages.map((message) => (
+                  <div 
+                    key={message.id} 
+                    className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div className={`max-w-[85%] rounded-lg p-3 ${
+                      message.sender === 'user' 
+                        ? 'bg-blue-600 text-white' 
+                        : 'bg-white border border-gray-200 shadow-sm'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        {message.sender === 'user' ? (
+                          <User size={14} className="text-white" />
+                        ) : (
+                          <div className="p-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded">
+                            <Wand2 size={12} className="text-white" />
+                          </div>
+                        )}
+                        <span className={`text-xs font-medium ${
+                          message.sender === 'user' ? 'text-white/90' : 'text-gray-500'
+                        }`}>
+                          {message.sender === 'user' ? 'You' : 'ReviewAI'} • {message.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </span>
+                      </div>
+                      <div className={`text-sm whitespace-pre-line ${message.sender === 'user' ? 'text-white' : 'text-gray-800'}`}>
+                        {message.text}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {/* Typing indicator */}
+                {isTyping && (
+                  <div className="flex justify-start">
+                    <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-3 max-w-[85%]">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="p-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded">
+                          <Wand2 size={12} className="text-white" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-500">ReviewAI is typing...</span>
+                      </div>
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div ref={chatEndRef} />
+              </div>
+            </div>
+            
+            {/* Chat Input */}
+            <div className="p-3 border-t border-gray-200 bg-white">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Ask ReviewAI about this code..."
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <motion.button
+                  onClick={handleSendMessage}
+                  disabled={!newMessage.trim() || isTyping}
+                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-colors disabled:opacity-50"
+                  whileHover={{ scale: (!newMessage.trim() || isTyping) ? 1 : 1.05 }}
+                  whileTap={{ scale: (!newMessage.trim() || isTyping) ? 1 : 0.95 }}
+                >
+                  <Send size={18} />
+                </motion.button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  onClick={() => setNewMessage("Why is this important?")}
+                  className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded-full transition-colors"
+                >
+                  Why is this important?
+                </button>
+                <button
+                  onClick={() => setNewMessage("How do I fix this?")}
+                  className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded-full transition-colors"
+                >
+                  How do I fix this?
+                </button>
+                <button
+                  onClick={() => setNewMessage("Will it break any existing code?")}
+                  className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded-full transition-colors"
+                >
+                  Will it break existing code?
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Issue Detail Modal - SINGLE CONFIRMATION ONLY */}
       <AnimatePresence>

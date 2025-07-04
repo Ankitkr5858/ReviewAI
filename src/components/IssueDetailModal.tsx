@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Wand2, Settings, GitCommit, CheckCircle, Code, ArrowRight, AlertTriangle, Info, Send, User, Bot } from 'lucide-react';
+import { X, Wand2, Settings, GitCommit, CheckCircle, Code, ArrowRight, AlertTriangle, Info, Send, User, MessageCircle } from 'lucide-react';
 import CodeDiffViewer from './CodeDiffViewer';
 import ConfirmationModal from './ConfirmationModal';
 
@@ -50,16 +50,16 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
     {
       id: '1',
       sender: 'bot',
-      text: `Hi there! I'm ReviewAI. I've identified an issue in your code at ${issue.file}:${issue.line}. Would you like me to explain more about this issue or help you fix it?`,
+      text: `I understand you're asking about this high eslint issue. The problem is "Missing semicolon". Would you like me to explain more about why this matters or how to fix it?`,
       timestamp: new Date()
     }
   ]);
   const [newMessage, setNewMessage] = useState('');
-  const [showChat, setShowChat] = useState(false);
+  const [showChat, setShowChat] = useState(true);
+  const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = React.useRef<HTMLDivElement>(null);
 
   const handleAIFixClick = () => {
-    // Show confirmation modal ONLY from this button
     setShowConfirmation(true);
   };
 
@@ -79,6 +79,71 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
     }
   };
 
+  const generateIntelligentResponse = (userMessage: string): string => {
+    const lowerMessage = userMessage.toLowerCase();
+    const { file, line, message, severity, category, rule, suggestion, originalCode, suggestedCode } = issue;
+
+    // Specific responses based on issue type and user question
+    if (lowerMessage.includes('why') && (lowerMessage.includes('important') || lowerMessage.includes('matter'))) {
+      if (category === 'security') {
+        return `This ${severity} security issue is critical because it could expose your application to attacks. Specifically, "${message}" can lead to vulnerabilities like XSS, injection attacks, or data breaches. Security issues should always be fixed immediately to protect your users and data.`;
+      } else if (category === 'performance') {
+        return `This performance issue matters because it can slow down your application and create a poor user experience. "${message}" can cause your app to use more memory, CPU, or network resources than necessary. Fixing it will make your app faster and more responsive.`;
+      } else if (rule?.includes('semi')) {
+        return `Missing semicolons matter because JavaScript's Automatic Semicolon Insertion (ASI) can cause unexpected behavior. When code is minified or certain patterns are used, missing semicolons can break your application or cause subtle bugs that are hard to debug.`;
+      } else if (category === 'eslint') {
+        return `This ESLint rule helps maintain code quality and consistency. "${message}" ensures your code follows best practices, making it more readable, maintainable, and less prone to bugs. Following these rules helps your team write better code together.`;
+      } else {
+        return `This ${severity} issue is important because it affects code quality and maintainability. "${message}" can lead to bugs, make your code harder to understand, or cause problems in production. Fixing it will improve your codebase overall.`;
+      }
+    }
+
+    if (lowerMessage.includes('how') && (lowerMessage.includes('fix') || lowerMessage.includes('solve'))) {
+      if (originalCode && suggestedCode) {
+        return `To fix this issue, I need to change:\n\n**Current code:** \`${originalCode.trim()}\`\n**Fixed code:** \`${suggestedCode.trim()}\`\n\n${suggestion || 'This change follows coding best practices.'} I can apply this fix automatically by creating a commit to your repository. Would you like me to do that?`;
+      } else if (suggestion) {
+        return `Here's how to fix this issue: ${suggestion}. The specific problem is "${message}" in ${file} at line ${line}. ${rule ? `This follows the ${rule} rule.` : ''} I can help you apply this fix automatically if you'd like.`;
+      } else {
+        return `To fix "${message}", you'll need to modify the code at ${file}:${line}. This is a ${severity} ${category || 'code quality'} issue that should be addressed to improve your codebase. I can apply an automatic fix if you click the "Apply AI Fix" button below.`;
+      }
+    }
+
+    if (lowerMessage.includes('break') && lowerMessage.includes('code')) {
+      return `No, this fix won't break your existing code! The suggested change is safe and follows best practices. ${originalCode && suggestedCode ? `I'm only changing "${originalCode.trim()}" to "${suggestedCode.trim()}"` : 'The fix addresses the specific issue without affecting other functionality'}. This type of ${category || 'code quality'} fix is designed to improve your code while maintaining its behavior.`;
+    }
+
+    if (lowerMessage.includes('explain') || lowerMessage.includes('what') || lowerMessage.includes('understand')) {
+      let explanation = `Let me explain this issue in detail:\n\n`;
+      explanation += `**File:** ${file} (line ${line})\n`;
+      explanation += `**Issue:** ${message}\n`;
+      explanation += `**Severity:** ${severity} - ${severity === 'high' ? 'needs immediate attention' : severity === 'medium' ? 'should be fixed soon' : 'can be addressed when convenient'}\n`;
+      if (category) explanation += `**Category:** ${category}\n`;
+      if (rule) explanation += `**Rule:** ${rule}\n`;
+      if (suggestion) explanation += `**Solution:** ${suggestion}\n`;
+      
+      if (category === 'prettier') {
+        explanation += `\nThis is a code formatting issue. Prettier helps maintain consistent code style across your project, making it easier for teams to collaborate and reducing merge conflicts.`;
+      } else if (category === 'eslint') {
+        explanation += `\nThis is an ESLint rule violation. ESLint helps catch potential bugs and enforces coding standards to improve code quality.`;
+      } else if (category === 'security') {
+        explanation += `\nThis is a security vulnerability that could be exploited by attackers. It's crucial to fix security issues to protect your application and users.`;
+      }
+      
+      return explanation;
+    }
+
+    if (lowerMessage.includes('automatic') || lowerMessage.includes('apply') || lowerMessage.includes('commit')) {
+      return `Yes! I can automatically apply this fix for you. When you click "Apply AI Fix & Commit", I will:\n\n1. ✅ Apply the fix to ${file} at line ${line}\n2. 🔄 Create a new commit with a descriptive message\n3. 📝 Update the issue status to resolved\n4. 🎯 Apply coding standards and best practices\n\nThe fix is safe and won't break your existing functionality. Would you like me to proceed?`;
+    }
+
+    if (lowerMessage.includes('thank') || lowerMessage.includes('thanks')) {
+      return `You're very welcome! I'm here to help make your code better and more secure. Feel free to ask me anything else about this issue or any other code quality questions. Happy coding! 🚀`;
+    }
+
+    // Default intelligent response
+    return `I understand you're asking about this ${severity} ${category || 'code'} issue. The problem "${message}" in ${file} at line ${line} ${suggestion ? `can be fixed by: ${suggestion}` : 'needs attention'}. ${rule ? `This relates to the ${rule} rule.` : ''} Would you like me to explain why this matters, how to fix it, or apply the fix automatically?`;
+  };
+
   const handleSendMessage = () => {
     if (!newMessage.trim()) return;
 
@@ -91,30 +156,13 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
     };
     
     setChatMessages(prev => [...prev, userMessage]);
+    const currentMessage = newMessage;
     setNewMessage('');
+    setIsTyping(true);
 
-    // Simulate bot response
+    // Simulate typing delay and generate intelligent response
     setTimeout(() => {
-      let botResponse = '';
-      
-      // Simple pattern matching for common questions
-      const lowerMessage = newMessage.toLowerCase();
-      
-      if (lowerMessage.includes('why') && lowerMessage.includes('important')) {
-        botResponse = `This issue is important because ${issue.category === 'security' ? 'it could lead to security vulnerabilities in your application' : issue.category === 'performance' ? 'it affects the performance of your application' : 'it affects code quality and maintainability'}. Fixing it will improve your codebase and prevent potential problems in the future.`;
-      } 
-      else if (lowerMessage.includes('explain') || lowerMessage.includes('what') || lowerMessage.includes('how')) {
-        botResponse = `The issue is: "${issue.message}". ${issue.suggestion || 'I recommend fixing this by following best practices for this type of code.'}`;
-      }
-      else if (lowerMessage.includes('fix') || lowerMessage.includes('solve')) {
-        botResponse = `I can fix this for you automatically! Just click the "Apply AI Fix & Commit" button below, and I'll create a commit with the fix. The suggested fix will ${issue.suggestedCode ? `change "${issue.originalCode?.trim()}" to "${issue.suggestedCode?.trim()}"` : 'address the issue according to best practices'}.`;
-      }
-      else if (lowerMessage.includes('thank') || lowerMessage.includes('thanks')) {
-        botResponse = "You're welcome! I'm here to help make your code better. Let me know if you have any other questions!";
-      }
-      else {
-        botResponse = `I understand you're asking about this ${issue.severity} ${issue.category || 'code'} issue. The problem is "${issue.message}". Would you like me to explain more about why this matters or how to fix it?`;
-      }
+      const botResponse = generateIntelligentResponse(currentMessage);
       
       const botMessage: ChatMessage = {
         id: `bot-${Date.now()}`,
@@ -124,7 +172,8 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
       };
       
       setChatMessages(prev => [...prev, botMessage]);
-    }, 1000);
+      setIsTyping(false);
+    }, 1500);
   };
 
   // Scroll to bottom of chat when new messages arrive
@@ -132,9 +181,8 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [chatMessages]);
+  }, [chatMessages, isTyping]);
 
-  // Get specific explanation for what the AI fix will do
   const getCodeExplanation = (issue: CodeIssue) => {
     if (!issue.originalCode || !issue.suggestedCode) {
       return {
@@ -149,7 +197,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
     const rule = issue.rule?.toLowerCase() || '';
     const message = issue.message.toLowerCase();
 
-    // Missing semicolon
     if (rule.includes('semi') || message.includes('semicolon')) {
       return {
         whatItDoes: `Adds a semicolon (;) at the end of the statement`,
@@ -158,7 +205,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
       };
     }
 
-    // Console.log statements
     if (rule.includes('console') || message.includes('console.log')) {
       return {
         whatItDoes: `Removes or comments out the console.log statement`,
@@ -167,7 +213,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
       };
     }
 
-    // Strict equality
     if (rule.includes('eqeqeq') || message.includes('strict equality') || message.includes('===')) {
       return {
         whatItDoes: `Changes loose equality (==) to strict equality (===)`,
@@ -176,7 +221,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
       };
     }
 
-    // Error handling
     if (rule.includes('error') || message.includes('error handling') || message.includes('try-catch')) {
       return {
         whatItDoes: `Wraps the async operation in a try-catch block`,
@@ -185,7 +229,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
       };
     }
 
-    // Unused variables
     if (rule.includes('unused') || message.includes('unused')) {
       return {
         whatItDoes: `Prefixes the variable name with underscore`,
@@ -194,7 +237,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
       };
     }
 
-    // Security issues (innerHTML)
     if (rule.includes('innerHTML') || message.includes('xss')) {
       return {
         whatItDoes: `Changes innerHTML to textContent`,
@@ -203,7 +245,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
       };
     }
 
-    // Default explanation
     return {
       whatItDoes: `Changes "${original}" to "${suggested}"`,
       whyBetter: "This change follows coding best practices and resolves the identified issue.",
@@ -292,10 +333,9 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                   </div>
                 </div>
 
-                {/* Pass null to onApplyFix to prevent double confirmation */}
                 <CodeDiffViewer issue={issue} onApplyFix={null} />
 
-                {/* 🔧 COMPACT CODE EXPLANATION SECTION */}
+                {/* Code explanation section */}
                 {issue.originalCode && issue.suggestedCode && (
                   <motion.div
                     className="mt-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-6"
@@ -309,7 +349,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                     </div>
 
                     <div className="space-y-4">
-                      {/* What the code does - COMPACT */}
                       <div className="flex items-start gap-3">
                         <ArrowRight size={18} className="text-blue-600 mt-1 flex-shrink-0" />
                         <div>
@@ -318,7 +357,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Why it's better - COMPACT */}
                       <div className="flex items-start gap-3">
                         <CheckCircle size={18} className="text-green-600 mt-1 flex-shrink-0" />
                         <div>
@@ -327,7 +365,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Impact - COMPACT */}
                       <div className="flex items-start gap-3">
                         <AlertTriangle size={18} className="text-orange-600 mt-1 flex-shrink-0" />
                         <div>
@@ -336,7 +373,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Code comparison visual - COMPACT */}
                       <div className="bg-white rounded-xl p-4 border border-blue-200 mt-2">
                         <h4 className="font-medium text-gray-900 mb-3 text-sm">📝 Before vs After:</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -362,7 +398,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Learning tip - COMPACT */}
                     <div className="mt-4 p-3 bg-blue-100 rounded-lg border border-blue-300">
                       <p className="text-blue-900 text-sm">
                         <strong>💡 Pro Tip:</strong> Understanding these specific changes helps you write better code from the start!
@@ -375,12 +410,15 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                 <div className="mt-6 border border-gray-200 rounded-xl overflow-hidden">
                   <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Bot size={18} className="text-blue-600" />
+                      <div className="p-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg">
+                        <Wand2 size={16} className="text-white" />
+                      </div>
                       <h3 className="font-medium text-gray-900">Chat with ReviewAI</h3>
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Online</span>
                     </div>
                     <button
                       onClick={() => setShowChat(!showChat)}
-                      className="text-sm text-blue-600 hover:text-blue-800"
+                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                     >
                       {showChat ? 'Hide Chat' : 'Show Chat'}
                     </button>
@@ -395,36 +433,58 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                         transition={{ duration: 0.3 }}
                         className="overflow-hidden"
                       >
-                        <div className="h-64 overflow-y-auto p-4 bg-gray-50">
+                        <div className="h-80 overflow-y-auto p-4 bg-gray-50">
                           <div className="space-y-4">
                             {chatMessages.map((message) => (
                               <div 
                                 key={message.id} 
                                 className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                               >
-                                <div className={`max-w-[80%] rounded-lg p-3 ${
+                                <div className={`max-w-[85%] rounded-lg p-3 ${
                                   message.sender === 'user' 
                                     ? 'bg-blue-600 text-white' 
-                                    : 'bg-white border border-gray-200'
+                                    : 'bg-white border border-gray-200 shadow-sm'
                                 }`}>
                                   <div className="flex items-center gap-2 mb-1">
                                     {message.sender === 'user' ? (
                                       <User size={14} className="text-white" />
                                     ) : (
-                                      <Bot size={14} className="text-blue-600" />
+                                      <div className="p-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded">
+                                        <Wand2 size={12} className="text-white" />
+                                      </div>
                                     )}
                                     <span className={`text-xs font-medium ${
-                                      message.sender === 'user' ? 'text-white' : 'text-gray-500'
+                                      message.sender === 'user' ? 'text-white/90' : 'text-gray-500'
                                     }`}>
                                       {message.sender === 'user' ? 'You' : 'ReviewAI'} • {message.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                     </span>
                                   </div>
-                                  <p className={`text-sm ${message.sender === 'user' ? 'text-white' : 'text-gray-800'}`}>
+                                  <div className={`text-sm whitespace-pre-line ${message.sender === 'user' ? 'text-white' : 'text-gray-800'}`}>
                                     {message.text}
-                                  </p>
+                                  </div>
                                 </div>
                               </div>
                             ))}
+                            
+                            {/* Typing indicator */}
+                            {isTyping && (
+                              <div className="flex justify-start">
+                                <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-3 max-w-[85%]">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <div className="p-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded">
+                                      <Wand2 size={12} className="text-white" />
+                                    </div>
+                                    <span className="text-xs font-medium text-gray-500">ReviewAI is typing...</span>
+                                  </div>
+                                  <div className="flex space-x-1">
+                                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
                             <div ref={chatEndRef} />
                           </div>
                         </div>
@@ -441,13 +501,33 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                             />
                             <motion.button
                               onClick={handleSendMessage}
-                              disabled={!newMessage.trim()}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                              whileHover={{ scale: !newMessage.trim() ? 1 : 1.05 }}
-                              whileTap={{ scale: !newMessage.trim() ? 1 : 0.95 }}
+                              disabled={!newMessage.trim() || isTyping}
+                              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-colors disabled:opacity-50"
+                              whileHover={{ scale: (!newMessage.trim() || isTyping) ? 1 : 1.05 }}
+                              whileTap={{ scale: (!newMessage.trim() || isTyping) ? 1 : 0.95 }}
                             >
                               <Send size={18} />
                             </motion.button>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              onClick={() => setNewMessage("Why is this important?")}
+                              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded-full transition-colors"
+                            >
+                              Why is this important?
+                            </button>
+                            <button
+                              onClick={() => setNewMessage("How do I fix this?")}
+                              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded-full transition-colors"
+                            >
+                              How do I fix this?
+                            </button>
+                            <button
+                              onClick={() => setNewMessage("Will it break any existing code?")}
+                              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded-full transition-colors"
+                            >
+                              Will it break existing code?
+                            </button>
                           </div>
                         </div>
                       </motion.div>
@@ -512,7 +592,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
         </motion.div>
       </motion.div>
 
-      {/* SINGLE Confirmation Modal - ONLY triggered from this modal */}
       <AnimatePresence>
         {showConfirmation && (
           <ConfirmationModal
