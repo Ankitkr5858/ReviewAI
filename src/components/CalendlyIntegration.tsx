@@ -22,7 +22,6 @@ const CalendlyIntegration: React.FC = () => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
-      // className="rounded-xl overflow-hidden shadow-xl"
     >
       {/* Using the exact embed code you provided */}
       <div 

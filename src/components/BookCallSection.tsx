@@ -33,7 +33,7 @@ const BookCallSection: React.FC = () => {
               <div className="w-32 h-32 bg-white/10 rounded-full mx-auto mb-6 flex items-center justify-center">
                 <img
                   src="/DSC_0222.jpg"
-                  alt="Ankit Ku"
+                  alt="Ankit Kumar"
                   className="w-28 h-28 rounded-full object-cover"
                   onError={(e) => {
                     // Fallback if image doesn't load
