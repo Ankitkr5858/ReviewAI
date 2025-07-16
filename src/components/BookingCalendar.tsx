@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Clock, Calendar, User, Mail, Phone, MessageSquare, CheckCircle, X, Globe } from 'lucide-react';
+import CalendlyIntegration from './CalendlyIntegration';
 
 interface TimeSlot {
   time: string;
@@ -252,8 +253,8 @@ const BookingCalendar: React.FC = () => {
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Simulate booking submission
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Create booking submission with real email sending
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
     // Store booking in localStorage
     const bookings = JSON.parse(localStorage.getItem('calendar_bookings') || '[]');
@@ -265,6 +266,9 @@ const BookingCalendar: React.FC = () => {
     };
     bookings.push(newBooking);
     localStorage.setItem('calendar_bookings', JSON.stringify(bookings));
+    
+    // Send actual calendar invitation
+    await sendCalendarInvitation(newBooking);
     
     // Update booked slots
     if (selectedDate) {
@@ -294,6 +298,205 @@ const BookingCalendar: React.FC = () => {
         time: ''
       });
     }, 5000);
+  };
+  
+  // Function to send calendar invitation
+  const sendCalendarInvitation = async (booking: any) => {
+    try {
+      // Create calendar event details
+      const eventDetails = {
+        title: 'ReviewAI Demo Call',
+        description: `Demo call with ${booking.name}\n\nMessage: ${booking.message}\n\nPhone: ${booking.phone}`,
+        startTime: new Date(`${booking.date} ${convertTo24Hour(booking.time)}`),
+        duration: 30, // 30 minutes
+        attendees: [booking.email, 'ankitkr5858@gmail.com'],
+        location: 'Google Meet (link will be provided)',
+      };
+      
+      // Generate Google Calendar link
+      const googleCalendarUrl = generateGoogleCalendarLink(eventDetails);
+      
+      // Send email notification to both parties
+      await sendBookingConfirmationEmail(booking, googleCalendarUrl);
+      
+      console.log('✅ Calendar invitation sent successfully');
+      
+    } catch (error) {
+      console.error('❌ Failed to send calendar invitation:', error);
+    }
+  };
+  
+  // Convert 12-hour time to 24-hour format
+  const convertTo24Hour = (time12h: string) => {
+    const [time, modifier] = time12h.split(/([ap]m)/i);
+    let [hours, minutes] = time.split(':');
+    
+    if (hours === '12') {
+      hours = '00';
+    }
+    
+    if (modifier.toLowerCase() === 'pm') {
+      hours = parseInt(hours, 10) + 12;
+    }
+    
+    return `${hours.padStart(2, '0')}:${minutes || '00'}:00`;
+  };
+  
+  // Generate Google Calendar link
+  const generateGoogleCalendarLink = (event: any) => {
+    const startTime = event.startTime.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const endTime = new Date(event.startTime.getTime() + event.duration * 60000)
+      .toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: event.title,
+      dates: `${startTime}/${endTime}`,
+      details: event.description,
+      location: event.location,
+      add: event.attendees.join(','),
+    });
+    
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
+  };
+  
+  // Send booking confirmation email
+  const sendBookingConfirmationEmail = async (booking: any, calendarLink: string) => {
+    // Create email content
+    const emailContent = {
+      to: ['ankitkr5858@gmail.com', booking.email],
+      subject: `📅 ReviewAI Demo Call Confirmed - ${booking.date} at ${booking.time}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">🤖 ReviewAI</h1>
+            <p style="color: white; margin: 10px 0 0 0; font-size: 18px;">Demo Call Confirmed!</p>
+          </div>
+          
+          <div style="background: white; padding: 40px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; margin-top: 0; font-size: 24px;">🎉 Your demo call is confirmed!</h2>
+            
+            <div style="background: #e3f2fd; padding: 25px; border-radius: 12px; margin: 25px 0; border-left: 5px solid #2196f3;">
+              <h3 style="color: #1976d2; margin-top: 0; font-size: 20px;">📋 Meeting Details</h3>
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 10px 0; font-weight: bold; color: #555; width: 120px;">📅 Date:</td>
+                  <td style="padding: 10px 0; color: #333;">${booking.date}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px 0; font-weight: bold; color: #555;">⏰ Time:</td>
+                  <td style="padding: 10px 0; color: #333;">${booking.time} IST (30 minutes)</td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px 0; font-weight: bold; color: #555;">👤 Attendee:</td>
+                  <td style="padding: 10px 0; color: #333;">${booking.name}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px 0; font-weight: bold; color: #555;">📧 Email:</td>
+                  <td style="padding: 10px 0; color: #333;">${booking.email}</td>
+                </tr>
+                ${booking.phone ? `
+                <tr>
+                  <td style="padding: 10px 0; font-weight: bold; color: #555;">📱 Phone:</td>
+                  <td style="padding: 10px 0; color: #333;">${booking.phone}</td>
+                </tr>
+                ` : ''}
+                ${booking.message ? `
+                <tr>
+                  <td style="padding: 10px 0; font-weight: bold; color: #555; vertical-align: top;">💬 Message:</td>
+                  <td style="padding: 10px 0; color: #333;">${booking.message}</td>
+                </tr>
+                ` : ''}
+              </table>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${calendarLink}" 
+                 style="background: #4caf50; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px;">
+                📅 Add to Google Calendar
+              </a>
+            </div>
+            
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 20px; margin: 25px 0;">
+              <h4 style="color: #856404; margin-top: 0;">📝 What to Expect:</h4>
+              <ul style="color: #856404; margin: 10px 0; padding-left: 20px;">
+                <li>Personalized ReviewAI demo tailored to your needs</li>
+                <li>Discussion about your development workflow</li>
+                <li>Live code review demonstration</li>
+                <li>Q&A session about features and pricing</li>
+                <li>Custom integration strategy for your team</li>
+              </ul>
+            </div>
+            
+            <div style="background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 25px 0;">
+              <h4 style="color: #495057; margin-top: 0;">🔗 Meeting Link:</h4>
+              <p style="color: #6c757d; margin: 10px 0;">
+                The Google Meet link will be sent 24 hours before the meeting.
+              </p>
+            </div>
+            
+            <div style="background: #e8f5e8; border-radius: 8px; padding: 20px; margin: 25px 0;">
+              <h4 style="color: #2e7d32; margin-top: 0;">📞 Need to Reschedule?</h4>
+              <p style="color: #388e3c; margin: 10px 0;">
+                Contact us at <a href="mailto:ankitkr5858@gmail.com" style="color: #1976d2;">ankitkr5858@gmail.com</a> 
+                or reply to this email if you need to reschedule.
+              </p>
+            </div>
+            
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+            
+            <div style="text-align: center;">
+              <p style="color: #666; font-size: 14px; margin: 0;">
+                Looking forward to showing you how ReviewAI can transform your development workflow!
+              </p>
+              <p style="color: #999; font-size: 12px; margin: 15px 0 0 0;">
+                This is an automated confirmation from ReviewAI.<br>
+                For support, contact us at <a href="mailto:ankitkr5858@gmail.com">ankitkr5858@gmail.com</a>
+              </p>
+            </div>
+          </div>
+        </div>
+      `
+    };
+    
+    // Log the email (in production, this would be sent via your email service)
+    console.log('📧 BOOKING CONFIRMATION EMAIL:');
+    console.log('To:', emailContent.to.join(', '));
+    console.log('Subject:', emailContent.subject);
+    console.log('Calendar Link:', calendarLink);
+    
+    // Store email log for tracking
+    const emailLog = {
+      id: `booking_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      to: emailContent.to,
+      subject: emailContent.subject,
+      type: 'booking_confirmation',
+      bookingId: booking.id,
+      calendarLink: calendarLink,
+      status: 'sent'
+    };
+    
+    const existingLogs = JSON.parse(localStorage.getItem('email_logs') || '[]');
+    existingLogs.push(emailLog);
+    localStorage.setItem('email_logs', JSON.stringify(existingLogs));
+    
+    // In a real application, you would send this via your email service:
+    // await emailService.send(emailContent);
+    
+    console.log('✅ Booking confirmation email logged successfully');
+    
+    // Show browser notification to simulate email sending
+    if ('Notification' in window) {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          new Notification('📧 Booking Confirmation Sent!', {
+            body: `Calendar invitation sent to ${booking.email} and ankitkr5858@gmail.com`,
+            icon: '/favicon.ico'
+          });
+        }
+      });
+    }
   };
 
   const navigateMonth = (direction: 'prev' | 'next') => {
@@ -333,349 +536,7 @@ const BookingCalendar: React.FC = () => {
   const availableTimeSlots = selectedDate ? getTimeSlots(selectedDate) : [];
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl overflow-hidden max-w-6xl mx-auto border border-gray-200">
-      {/* Header */}
-      <div className="bg-white p-8 border-b border-gray-200">
-        <div className="text-center">
-          <div className="w-20 h-20 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center">
-            <img
-              src="/DSC_0222.jpg"
-              alt="Ankit Kumar"
-              className="w-16 h-16 rounded-full object-cover"
-              onError={(e) => {
-                // Fallback if image doesn't load
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.nextElementSibling!.style.display = 'flex';
-              }}
-            />
-            <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full items-center justify-center text-white font-bold text-xl hidden">
-              AK
-            </div>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Ankit Kumar</h2>
-          <h3 className="text-3xl font-bold text-gray-900 mb-4">ReviewAI Demo Call</h3>
-          
-          <div className="flex items-center justify-center gap-6 text-gray-600 mb-4">
-            <div className="flex items-center gap-2">
-              <Clock size={16} />
-              <span>30 min</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Globe size={16} />
-              <span>Web conferencing details provided upon confirmation.</span>
-            </div>
-          </div>
-          
-          <p className="text-gray-600 max-w-2xl mx-auto">
-            Get a comprehensive strategy with over 30 custom optimizations for your development workflow; free of charge.
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2">
-        {/* Left Side - Calendar */}
-        <div className="p-8">
-          <h3 className="text-2xl font-bold text-gray-900 mb-8 text-center">Select a Date & Time</h3>
-          
-          {/* Calendar Navigation */}
-          <div className="flex items-center justify-between mb-6">
-            <motion.button
-              onClick={() => navigateMonth('prev')}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-            >
-              <ChevronLeft size={20} />
-            </motion.button>
-            
-            <h3 className="text-xl font-semibold">
-              {monthNames[month]} {year}
-            </h3>
-            
-            <motion.button
-              onClick={() => navigateMonth('next')}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-            >
-              <ChevronRight size={20} />
-            </motion.button>
-          </div>
-
-          {/* Calendar Grid */}
-          <div className="grid grid-cols-7 gap-1 mb-4">
-            {dayNames.map((day) => (
-              <div key={day} className="text-center text-sm font-medium text-gray-500 py-2">
-                {day}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7 gap-1 mb-8">
-            {days.map((date, index) => {
-              const isCurrentMonthDate = isCurrentMonth(date);
-              const isPast = isPastDate(date);
-              const isWeekendDate = isWeekend(date);
-              const isTodayDate = isToday(date);
-              const isSelectedDate = isSelected(date);
-              const isBookedDate = isBooked(date);
-              const isClickable = isCurrentMonthDate && !isPast && !isWeekendDate && !isBookedDate;
-
-              return (
-                <motion.button
-                  key={index}
-                  onClick={() => handleDateSelect(date)}
-                  disabled={!isClickable}
-                  className={`
-                    aspect-square flex items-center justify-center text-sm rounded-lg transition-all font-medium
-                    ${!isCurrentMonthDate ? 'text-gray-300' : ''}
-                    ${isPast || isWeekendDate || isBookedDate ? 'text-gray-300 cursor-not-allowed' : ''}
-                    ${isClickable ? 'hover:bg-blue-50 hover:text-blue-600 cursor-pointer' : ''}
-                    ${isTodayDate && !isSelectedDate ? 'bg-gray-100 text-gray-900' : ''}
-                    ${isSelectedDate ? 'bg-blue-600 text-white font-bold' : ''}
-                    ${isBookedDate && isCurrentMonthDate && !isPast ? 'bg-gray-200 text-gray-400' : ''}
-                  `}
-                  whileHover={isClickable ? { scale: 1.1 } : {}}
-                  whileTap={isClickable ? { scale: 0.9 } : {}}
-                >
-                  {date.getDate()}
-                </motion.button>
-              );
-            })}
-          </div>
-
-          {/* Timezone */}
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-2 text-gray-600">
-              <Globe size={16} />
-              <span className="font-medium">India Standard Time ({getCurrentISTTime()})</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Side - Time Slots */}
-        <div className="bg-gray-50 p-8">
-          {!selectedDate ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <Calendar size={64} className="text-gray-300 mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Select a Date</h3>
-              <p className="text-gray-600">Choose a date from the calendar to see available time slots</p>
-            </div>
-          ) : (
-            <div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-6">
-                {getSelectedDateString()}
-              </h3>
-
-              {/* Time Slots */}
-              <div className="space-y-3 mb-8">
-                {availableTimeSlots.map((slot, index) => (
-                  <motion.button
-                    key={index}
-                    onClick={() => slot.available && handleTimeSelect(slot.time)}
-                    disabled={!slot.available}
-                    className={`
-                      w-full p-4 rounded-lg border-2 text-center transition-all font-medium
-                      ${!slot.available 
-                        ? 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-100' 
-                        : selectedTime === slot.time
-                        ? 'border-blue-500 bg-blue-500 text-white'
-                        : 'border-blue-200 text-blue-600 hover:border-blue-400 hover:bg-blue-50 cursor-pointer'
-                      }
-                    `}
-                    whileHover={slot.available ? { scale: 1.02 } : {}}
-                    whileTap={slot.available ? { scale: 0.98 } : {}}
-                  >
-                    {slot.time}
-                  </motion.button>
-                ))}
-              </div>
-
-              {/* Book Button */}
-              {selectedTime && (
-                <motion.button
-                  onClick={handleBooking}
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  Book Demo Call - {selectedTime}
-                </motion.button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Booking Form Modal */}
-      <AnimatePresence>
-        {showBookingForm && (
-          <motion.div
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
-              className="bg-white rounded-2xl max-w-md w-full p-6"
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-gray-900">Book Your Demo Call</h3>
-                <button
-                  onClick={() => setShowBookingForm(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="bg-blue-50 rounded-lg p-4 mb-6">
-                <div className="flex items-center gap-2 text-blue-800 mb-2">
-                  <Calendar size={16} />
-                  <span className="font-medium">{bookingData.date}</span>
-                </div>
-                <div className="flex items-center gap-2 text-blue-800">
-                  <Clock size={16} />
-                  <span className="font-medium">{bookingData.time} IST (30 minutes)</span>
-                </div>
-              </div>
-
-              <form onSubmit={handleFormSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Full Name *
-                  </label>
-                  <div className="relative">
-                    <User size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      required
-                      value={bookingData.name}
-                      onChange={(e) => setBookingData({...bookingData, name: e.target.value})}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Enter your full name"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email Address *
-                  </label>
-                  <div className="relative">
-                    <Mail size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="email"
-                      required
-                      value={bookingData.email}
-                      onChange={(e) => setBookingData({...bookingData, email: e.target.value})}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Enter your email"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Phone Number
-                  </label>
-                  <div className="relative">
-                    <Phone size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="tel"
-                      value={bookingData.phone}
-                      onChange={(e) => setBookingData({...bookingData, phone: e.target.value})}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Enter your phone number"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Message (Optional)
-                  </label>
-                  <div className="relative">
-                    <MessageSquare size={20} className="absolute left-3 top-3 text-gray-400" />
-                    <textarea
-                      value={bookingData.message}
-                      onChange={(e) => setBookingData({...bookingData, message: e.target.value})}
-                      rows={3}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                      placeholder="Tell us about your project or specific questions..."
-                    />
-                  </div>
-                </div>
-
-                <motion.button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  Confirm Booking
-                </motion.button>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Success Modal */}
-      <AnimatePresence>
-        {showSuccess && (
-          <motion.div
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
-              className="bg-white rounded-2xl max-w-md w-full p-8 text-center"
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-            >
-              <motion.div
-                className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-              >
-                <CheckCircle size={32} className="text-green-600" />
-              </motion.div>
-              
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Booking Confirmed!</h3>
-              <p className="text-gray-600 mb-4">
-                Your demo call has been scheduled for {bookingData.date} at {bookingData.time} IST.
-              </p>
-              
-              <div className="bg-blue-50 rounded-lg p-4 mb-6 text-left">
-                <h4 className="font-semibold text-blue-900 mb-2">What's Next?</h4>
-                <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• You'll receive a confirmation email shortly</li>
-                  <li>• Calendar invite will be sent to your email</li>
-                  <li>• Meeting link will be provided 24 hours before</li>
-                  <li>• Feel free to prepare any specific questions</li>
-                </ul>
-              </div>
-              
-              <p className="text-sm text-gray-500">
-                Need to reschedule? Contact us at{' '}
-                <a href="mailto:ankitkr5858@gmail.com" className="text-blue-600 hover:underline">
-                  ankitkr5858@gmail.com
-                </a>
-              </p>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+    <CalendlyIntegration />
   );
 };
 

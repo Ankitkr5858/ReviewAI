@@ -21,7 +21,9 @@ import {
   Search,
   Settings,
   GitMerge,
-  Menu
+  Menu,
+  Phone,
+  MessageSquare
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import FeedbackSection from './FeedbackSection';
@@ -633,6 +635,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               >
                 Feedback
               </a>
+              <a 
+                href="#book-a-call" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToSection('book-a-call');
+                }}
+                className="text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
+              >
+                Book A Call
+              </a>
               <motion.button
                 onClick={handleGetStarted}
                 className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-all font-medium shadow-xl cursor-pointer"
@@ -710,6 +722,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 className="block py-2 text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
               >
                 Feedback
+              </a>
+              <a 
+                href="#book-a-call" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToSection('book-a-call');
+                }}
+                className="text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
+              >
+                Book A Call
               </a>
               <motion.button
                 onClick={() => {
@@ -1278,6 +1300,88 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       </section>
 
       {/* FAQ Section */}
+        {/* Chat with AI in PR - Coming Soon Section */}
+        <section className="py-24 bg-gradient-to-br from-purple-50 to-blue-50">
+          <div className="max-w-7xl mx-auto px-6 text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+            >
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-100 to-blue-100 rounded-full mb-6">
+                <MessageSquare size={16} className="text-purple-600" />
+                <span className="text-sm font-medium bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                  Coming Soon
+                </span>
+              </div>
+              
+              <h2 className="text-5xl font-bold text-gray-900 mb-6">
+                Chat with AI in <span className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">Pull Requests</span>
+              </h2>
+              <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-8">
+                Soon you'll be able to have real-time conversations with ReviewAI directly in your pull requests. Ask questions about specific code lines and get instant, contextual explanations.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto mb-12">
+                <motion.div
+                  className="bg-white p-6 rounded-2xl shadow-lg border border-purple-100"
+                  whileHover={{ scale: 1.05, y: -5 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                    <MessageSquare size={24} className="text-purple-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Inline Conversations</h3>
+                  <p className="text-gray-600 text-sm">Chat directly on code lines, just like GitHub comments but with AI intelligence</p>
+                </motion.div>
+                
+                <motion.div
+                  className="bg-white p-6 rounded-2xl shadow-lg border border-blue-100"
+                  whileHover={{ scale: 1.05, y: -5 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                    <Wand2 size={24} className="text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Contextual Responses</h3>
+                  <p className="text-gray-600 text-sm">AI understands your code context and provides relevant explanations</p>
+                </motion.div>
+                
+                <motion.div
+                  className="bg-white p-6 rounded-2xl shadow-lg border border-green-100"
+                  whileHover={{ scale: 1.05, y: -5 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                    <Zap size={24} className="text-green-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Instant Learning</h3>
+                  <p className="text-gray-600 text-sm">Get immediate answers to improve your coding skills on the spot</p>
+                </motion.div>
+              </div>
+              
+              <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl p-8 text-white max-w-2xl mx-auto">
+                <h3 className="text-2xl font-bold mb-4">Be the First to Know</h3>
+                <p className="mb-6">Join our waitlist to get early access to AI-powered PR conversations</p>
+                <div className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
+                  <input
+                    type="email"
+                    placeholder="Enter your email"
+                    className="flex-1 px-4 py-3 rounded-lg text-gray-900 placeholder-gray-500"
+                  />
+                  <motion.button
+                    className="px-6 py-3 bg-white text-purple-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    Join Waitlist
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </section>
+
       <section id="faq">
         <FAQSection />
       </section>
@@ -1285,6 +1389,65 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       {/* FEEDBACK SECTION */}
       <section id="feedback">
         <FeedbackSection />
+      </section>
+
+      {/* Demo Call Section */}
+      <section className="py-24 bg-gradient-to-r from-blue-600 to-purple-600 text-white" id="book-a-call">
+        <div className="max-w-7xl mx-auto px-6 py-24">
+          <div className="text-center">
+            <motion.h2
+              className="text-5xl font-bold text-white mb-6"
+            >
+              See ReviewAI in <span className="text-blue-200">Action</span>
+            </motion.h2>
+            
+            <motion.p
+              className="text-xl text-blue-100 max-w-3xl mx-auto mb-12"
+            >
+              Book a personalized demo to see how ReviewAI can transform your development workflow. Our team will show you exactly how to integrate AI-powered code reviews into your existing process.
+            </motion.p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto mb-12">
+              <motion.div
+                className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl border border-white/20"
+                whileHover={{ scale: 1.05, y: -5 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                  <Wand2 size={24} className="text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">Live Demo</h3>
+                <p className="text-blue-100 text-sm">See ReviewAI analyze real code and provide instant feedback</p>
+              </motion.div>
+              
+              <motion.div
+                className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl border border-white/20"
+                whileHover={{ scale: 1.05, y: -5 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                  <Settings size={24} className="text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">Custom Setup</h3>
+                <p className="text-blue-100 text-sm">Learn how to configure ReviewAI for your specific needs</p>
+              </motion.div>
+              
+              <motion.div
+                className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl border border-white/20"
+                whileHover={{ scale: 1.05, y: -5 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                  <Users size={24} className="text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">Team Training</h3>
+                <p className="text-blue-100 text-sm">Get your team up to speed with best practices</p>
+              </motion.div>
+            </div>
+
+     
+          </div>
+        </div>
       </section>
 
       {/* Booking Calendar Section */}

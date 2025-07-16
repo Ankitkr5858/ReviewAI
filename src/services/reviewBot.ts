@@ -163,10 +163,10 @@ export class ReviewBot {
 
         const language = this.getLanguageFromFilename(file.filename);
         
-        // Enhanced analysis with prettier/linting
-        const analysis = await this.analyzer.analyzeCode(content, file.filename, language);
+        // FIXED: Analyze only changed lines for PR reviews
+        const analysis = await this.analyzer.analyzeChangedLines(content, file.filename, language, changedLines);
         
-        // Filter out info-level issues
+        // FIXED: Filter to show only critical and medium severity issues
         const filteredIssues = analysis.issues.filter(issue => 
           issue.severity === 'high' || issue.severity === 'medium'
         );

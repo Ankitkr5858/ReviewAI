@@ -1,7 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, CheckCircle, Info, Copy, ExternalLink, MessageSquare } from 'lucide-react';
-import PRCommentSystem from './PRCommentSystem';
+import { AlertTriangle, CheckCircle, Info, Copy, ExternalLink } from 'lucide-react';
 
 interface CodeIssue {
   type: 'error' | 'warning' | 'info';
@@ -24,9 +23,6 @@ interface CodeDiffViewerProps {
 }
 
 const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) => {
-  const [showCommentLeft, setShowCommentLeft] = React.useState(false);
-  const [showCommentRight, setShowCommentRight] = React.useState(false);
-  const [showCommentSingle, setShowCommentSingle] = React.useState(false);
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -56,22 +52,6 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-  };
-  
-  const handleCommentClick = (side: 'left' | 'right' | 'single') => {
-    if (side === 'left') {
-      setShowCommentLeft(true);
-      setShowCommentRight(false);
-      setShowCommentSingle(false);
-    } else if (side === 'right') {
-      setShowCommentLeft(false);
-      setShowCommentRight(true);
-      setShowCommentSingle(false);
-    } else {
-      setShowCommentLeft(false);
-      setShowCommentRight(false);
-      setShowCommentSingle(true);
-    }
   };
 
   // FIXED: Highlight changes in code with light background colors and better contrast
@@ -176,13 +156,6 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
               <span className="text-sm font-medium text-red-700">Current Code</span>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleCommentClick('left')}
-                  className="p-1 hover:bg-red-100 rounded transition-colors"
-                  title="Comment on this code"
-                >
-                  <MessageSquare size={14} className="text-red-700" />
-                </button>
-                <button
                   onClick={() => copyToClipboard(issue.originalCode!)}
                   className="p-1 hover:bg-red-100 rounded transition-colors"
                 >
@@ -203,16 +176,6 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
               </pre>
             </div>
             
-            {/* Inline Comment System for Left Side */}
-            {showCommentLeft && (
-              <PRCommentSystem
-                isOpen={true}
-                onClose={() => setShowCommentLeft(false)}
-                fileName={issue.file}
-                lineNumber={issue.line}
-                lineContent={issue.originalCode!}
-              />
-            )}
           </div>
 
           {/* Suggested Code (Right Side) */}
@@ -220,13 +183,6 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
             <div className="bg-green-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
               <span className="text-sm font-medium text-green-700">Suggested Fix</span>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleCommentClick('right')}
-                  className="p-1 hover:bg-green-100 rounded transition-colors"
-                  title="Comment on this code"
-                >
-                  <MessageSquare size={14} className="text-green-700" />
-                </button>
                 <button
                   onClick={() => copyToClipboard(issue.suggestedCode!)}
                   className="p-1 hover:bg-green-100 rounded transition-colors"
@@ -248,16 +204,6 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
               </pre>
             </div>
             
-            {/* Inline Comment System for Right Side */}
-            {showCommentRight && (
-              <PRCommentSystem
-                isOpen={true}
-                onClose={() => setShowCommentRight(false)}
-                fileName={issue.file}
-                lineNumber={issue.line}
-                lineContent={issue.suggestedCode!}
-              />
-            )}
           </div>
         </div>
       )}
@@ -268,13 +214,6 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
           <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
             <span className="text-sm font-medium text-gray-700">Code at Line {issue.line}</span>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleCommentClick('single')}
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
-                title="Comment on this code"
-              >
-                <MessageSquare size={14} className="text-gray-700" />
-              </button>
               <button
                 onClick={() => copyToClipboard(issue.originalCode!)}
                 className="p-1 hover:bg-gray-100 rounded transition-colors"
@@ -291,16 +230,6 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
             </pre>
           </div>
           
-          {/* Inline Comment System for Single Code Block */}
-          {showCommentSingle && (
-            <PRCommentSystem
-              isOpen={true}
-              onClose={() => setShowCommentSingle(false)}
-              fileName={issue.file}
-              lineNumber={issue.line}
-              lineContent={issue.originalCode!}
-            />
-          )}
         </div>
       )}
     </motion.div>
