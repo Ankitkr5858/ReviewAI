@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Wand2, Settings, GitCommit, CheckCircle, Code, ArrowRight, AlertTriangle, Info, Send, User, Bot } from 'lucide-react';
+import { X, Wand2, Settings, GitCommit, CheckCircle, Code, ArrowRight, AlertTriangle, Info, Send, User, MessageCircle } from 'lucide-react';
 import CodeDiffViewer from './CodeDiffViewer';
 import ConfirmationModal from './ConfirmationModal';
 
@@ -29,13 +29,6 @@ interface IssueDetailModalProps {
   repositoryUrl: string;
 }
 
-interface ChatMessage {
-  id: string;
-  sender: 'user' | 'bot';
-  text: string;
-  timestamp: Date;
-}
-
 const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
   issue,
   onClose,
@@ -46,20 +39,8 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
   const [fixing, setFixing] = useState(false);
   const [fixed, setFixed] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: '1',
-      sender: 'bot',
-      text: `Hi there! I'm ReviewAI. I've identified an issue in your code at ${issue.file}:${issue.line}. Would you like me to explain more about this issue or help you fix it?`,
-      timestamp: new Date()
-    }
-  ]);
-  const [newMessage, setNewMessage] = useState('');
-  const [showChat, setShowChat] = useState(false);
-  const chatEndRef = React.useRef<HTMLDivElement>(null);
 
   const handleAIFixClick = () => {
-    // Show confirmation modal ONLY from this button
     setShowConfirmation(true);
   };
 
@@ -79,62 +60,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
     }
   };
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim()) return;
-
-    // Add user message
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      sender: 'user',
-      text: newMessage,
-      timestamp: new Date()
-    };
-    
-    setChatMessages(prev => [...prev, userMessage]);
-    setNewMessage('');
-
-    // Simulate bot response
-    setTimeout(() => {
-      let botResponse = '';
-      
-      // Simple pattern matching for common questions
-      const lowerMessage = newMessage.toLowerCase();
-      
-      if (lowerMessage.includes('why') && lowerMessage.includes('important')) {
-        botResponse = `This issue is important because ${issue.category === 'security' ? 'it could lead to security vulnerabilities in your application' : issue.category === 'performance' ? 'it affects the performance of your application' : 'it affects code quality and maintainability'}. Fixing it will improve your codebase and prevent potential problems in the future.`;
-      } 
-      else if (lowerMessage.includes('explain') || lowerMessage.includes('what') || lowerMessage.includes('how')) {
-        botResponse = `The issue is: "${issue.message}". ${issue.suggestion || 'I recommend fixing this by following best practices for this type of code.'}`;
-      }
-      else if (lowerMessage.includes('fix') || lowerMessage.includes('solve')) {
-        botResponse = `I can fix this for you automatically! Just click the "Apply AI Fix & Commit" button below, and I'll create a commit with the fix. The suggested fix will ${issue.suggestedCode ? `change "${issue.originalCode?.trim()}" to "${issue.suggestedCode?.trim()}"` : 'address the issue according to best practices'}.`;
-      }
-      else if (lowerMessage.includes('thank') || lowerMessage.includes('thanks')) {
-        botResponse = "You're welcome! I'm here to help make your code better. Let me know if you have any other questions!";
-      }
-      else {
-        botResponse = `I understand you're asking about this ${issue.severity} ${issue.category || 'code'} issue. The problem is "${issue.message}". Would you like me to explain more about why this matters or how to fix it?`;
-      }
-      
-      const botMessage: ChatMessage = {
-        id: `bot-${Date.now()}`,
-        sender: 'bot',
-        text: botResponse,
-        timestamp: new Date()
-      };
-      
-      setChatMessages(prev => [...prev, botMessage]);
-    }, 1000);
-  };
-
-  // Scroll to bottom of chat when new messages arrive
-  React.useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [chatMessages]);
-
-  // Get specific explanation for what the AI fix will do
   const getCodeExplanation = (issue: CodeIssue) => {
     if (!issue.originalCode || !issue.suggestedCode) {
       return {
@@ -149,7 +74,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
     const rule = issue.rule?.toLowerCase() || '';
     const message = issue.message.toLowerCase();
 
-    // Missing semicolon
     if (rule.includes('semi') || message.includes('semicolon')) {
       return {
         whatItDoes: `Adds a semicolon (;) at the end of the statement`,
@@ -158,7 +82,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
       };
     }
 
-    // Console.log statements
     if (rule.includes('console') || message.includes('console.log')) {
       return {
         whatItDoes: `Removes or comments out the console.log statement`,
@@ -167,7 +90,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
       };
     }
 
-    // Strict equality
     if (rule.includes('eqeqeq') || message.includes('strict equality') || message.includes('===')) {
       return {
         whatItDoes: `Changes loose equality (==) to strict equality (===)`,
@@ -176,7 +98,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
       };
     }
 
-    // Error handling
     if (rule.includes('error') || message.includes('error handling') || message.includes('try-catch')) {
       return {
         whatItDoes: `Wraps the async operation in a try-catch block`,
@@ -185,7 +106,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
       };
     }
 
-    // Unused variables
     if (rule.includes('unused') || message.includes('unused')) {
       return {
         whatItDoes: `Prefixes the variable name with underscore`,
@@ -194,7 +114,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
       };
     }
 
-    // Security issues (innerHTML)
     if (rule.includes('innerHTML') || message.includes('xss')) {
       return {
         whatItDoes: `Changes innerHTML to textContent`,
@@ -203,7 +122,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
       };
     }
 
-    // Default explanation
     return {
       whatItDoes: `Changes "${original}" to "${suggested}"`,
       whyBetter: "This change follows coding best practices and resolves the identified issue.",
@@ -292,10 +210,9 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                   </div>
                 </div>
 
-                {/* Pass null to onApplyFix to prevent double confirmation */}
                 <CodeDiffViewer issue={issue} onApplyFix={null} />
 
-                {/* 🔧 COMPACT CODE EXPLANATION SECTION */}
+                {/* Code explanation section */}
                 {issue.originalCode && issue.suggestedCode && (
                   <motion.div
                     className="mt-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-6"
@@ -309,7 +226,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                     </div>
 
                     <div className="space-y-4">
-                      {/* What the code does - COMPACT */}
                       <div className="flex items-start gap-3">
                         <ArrowRight size={18} className="text-blue-600 mt-1 flex-shrink-0" />
                         <div>
@@ -318,7 +234,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Why it's better - COMPACT */}
                       <div className="flex items-start gap-3">
                         <CheckCircle size={18} className="text-green-600 mt-1 flex-shrink-0" />
                         <div>
@@ -327,7 +242,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Impact - COMPACT */}
                       <div className="flex items-start gap-3">
                         <AlertTriangle size={18} className="text-orange-600 mt-1 flex-shrink-0" />
                         <div>
@@ -336,7 +250,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Code comparison visual - COMPACT */}
                       <div className="bg-white rounded-xl p-4 border border-blue-200 mt-2">
                         <h4 className="font-medium text-gray-900 mb-3 text-sm">📝 Before vs After:</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -362,7 +275,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Learning tip - COMPACT */}
                     <div className="mt-4 p-3 bg-blue-100 rounded-lg border border-blue-300">
                       <p className="text-blue-900 text-sm">
                         <strong>💡 Pro Tip:</strong> Understanding these specific changes helps you write better code from the start!
@@ -370,90 +282,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                     </div>
                   </motion.div>
                 )}
-
-                {/* Chat with ReviewAI */}
-                <div className="mt-6 border border-gray-200 rounded-xl overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Bot size={18} className="text-blue-600" />
-                      <h3 className="font-medium text-gray-900">Chat with ReviewAI</h3>
-                    </div>
-                    <button
-                      onClick={() => setShowChat(!showChat)}
-                      className="text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      {showChat ? 'Hide Chat' : 'Show Chat'}
-                    </button>
-                  </div>
-                  
-                  <AnimatePresence>
-                    {showChat && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="h-64 overflow-y-auto p-4 bg-gray-50">
-                          <div className="space-y-4">
-                            {chatMessages.map((message) => (
-                              <div 
-                                key={message.id} 
-                                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                              >
-                                <div className={`max-w-[80%] rounded-lg p-3 ${
-                                  message.sender === 'user' 
-                                    ? 'bg-blue-600 text-white' 
-                                    : 'bg-white border border-gray-200'
-                                }`}>
-                                  <div className="flex items-center gap-2 mb-1">
-                                    {message.sender === 'user' ? (
-                                      <User size={14} className="text-white" />
-                                    ) : (
-                                      <Bot size={14} className="text-blue-600" />
-                                    )}
-                                    <span className={`text-xs font-medium ${
-                                      message.sender === 'user' ? 'text-white' : 'text-gray-500'
-                                    }`}>
-                                      {message.sender === 'user' ? 'You' : 'ReviewAI'} • {message.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                    </span>
-                                  </div>
-                                  <p className={`text-sm ${message.sender === 'user' ? 'text-white' : 'text-gray-800'}`}>
-                                    {message.text}
-                                  </p>
-                                </div>
-                              </div>
-                            ))}
-                            <div ref={chatEndRef} />
-                          </div>
-                        </div>
-                        
-                        <div className="p-3 border-t border-gray-200 bg-white">
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={newMessage}
-                              onChange={(e) => setNewMessage(e.target.value)}
-                              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                              placeholder="Ask ReviewAI about this issue..."
-                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                            <motion.button
-                              onClick={handleSendMessage}
-                              disabled={!newMessage.trim()}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                              whileHover={{ scale: !newMessage.trim() ? 1 : 1.05 }}
-                              whileTap={{ scale: !newMessage.trim() ? 1 : 0.95 }}
-                            >
-                              <Send size={18} />
-                            </motion.button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
 
                 {/* Action Buttons */}
                 <div className="mt-6 flex flex-col sm:flex-row gap-4">
@@ -512,7 +340,6 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
         </motion.div>
       </motion.div>
 
-      {/* SINGLE Confirmation Modal - ONLY triggered from this modal */}
       <AnimatePresence>
         {showConfirmation && (
           <ConfirmationModal

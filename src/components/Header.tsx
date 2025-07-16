@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, Wand2, User, LogOut, Settings, ChevronDown, Home, GitBranch } from 'lucide-react';
+import { Menu, Wand2, User, LogOut, Settings, ChevronDown, Home, GitBranch, Calendar, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useGitHubIntegration } from '../hooks/useGitHubIntegration';
+import CalendlyIntegration from './CalendlyIntegration';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -14,6 +15,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
   const location = useLocation();
   const { disconnect } = useGitHubIntegration();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showBookingModal, setShowBookingModal] = useState(false);
   const [userInfo, setUserInfo] = useState({
     name: 'User',
     email: 'user@example.com',
@@ -79,6 +81,8 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
     { path: '/dashboard', label: 'Dashboard', icon: Home },
     { path: '/repositories', label: 'Repositories', icon: GitBranch },
     { path: '/test', label: 'Review Code', icon: Wand2 },
+    { path: '/feedback', label: 'Feedback', icon: MessageSquare },
+    { path: '#book-call', label: 'Book a Call', icon: Calendar, action: () => setShowBookingModal(true) }
   ];
 
   const isActivePath = (path: string) => {
@@ -91,6 +95,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
   // FIXED: Simple navigation without loading state
   const handleNavigation = (path: string) => {
     if (location.pathname === path) return; // Don't navigate if already on the page
+    if (path === '#book-call') return; // Don't navigate for book call
     navigate(path);
   };
 
@@ -128,9 +133,9 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
           {/* FIXED: Center navigation - SLOWER and SMOOTHER animations */}
           <nav className="hidden md:flex items-center gap-1 relative">
             {navigationItems.map((item) => (
-              <motion.button
+              <motion.div
                 key={item.path}
-                onClick={() => handleNavigation(item.path)}
+                onClick={() => item.action ? item.action() : handleNavigation(item.path)}
                 className={`relative flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${
                   isActivePath(item.path)
                     ? 'text-white'
@@ -158,7 +163,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
                   <item.icon size={16} />
                   <span className="font-medium">{item.label}</span>
                 </div>
-              </motion.button>
+              </motion.div>
             ))}
           </nav>
 
@@ -314,6 +319,47 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
           </div>
         </div>
       </div>
+      
+      {/* Booking Modal */}
+      <AnimatePresence>
+        {showBookingModal && (
+          <motion.div
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowBookingModal(false)}
+          >
+            <motion.div
+              className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">Book a Demo Call</h2>
+              <motion.button
+                onClick={() => setShowBookingModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <X size={20} />
+              </motion.button>
+            </div>
+            <CalendlyIntegration 
+              url="https://calendly.com/ankitkr5858/30min" 
+              prefill={{
+                name: userInfo.name,
+                email: userInfo.email
+              }}
+              styles={{ height: '700px' }}
+            />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   );
 };

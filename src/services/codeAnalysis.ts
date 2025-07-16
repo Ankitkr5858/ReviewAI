@@ -520,6 +520,7 @@ export class CodeAnalysisService {
       
       if (this.issueCache.has(fileHash)) {
         const cachedIssues = this.issueCache.get(fileHash)!;
+        // FIXED: Filter cached issues to show only critical and medium severity
         const filteredCached = cachedIssues.filter(issue => 
           issue.severity === 'high' || issue.severity === 'medium'
         );
@@ -543,6 +544,7 @@ export class CodeAnalysisService {
       const allIssues = [...staticIssues, ...prettierIssues, ...lintingIssues, ...performanceIssues, ...securityIssues];
       const uniqueIssues = this.deduplicateIssues(allIssues);
       
+      // FIXED: Filter to show only critical and medium severity issues
       const filteredIssues = uniqueIssues.filter(issue => 
         issue.severity === 'high' || issue.severity === 'medium'
       );
