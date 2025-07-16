@@ -1514,7 +1514,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">
                 <img
-                  src="/DSC_0222.jpg"
+                  src="ankit.jpg"
                   alt="Ankit Kumar"
                   className="w-7 h-7 rounded-full object-cover"
                   onError={(e) => {

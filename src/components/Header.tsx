@@ -93,8 +93,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, onSubscriptionClick }) => 
     { path: '/dashboard', label: 'Dashboard', icon: Home },
     { path: '/repositories', label: 'Repositories', icon: GitBranch },
     { path: '/test', label: 'Review Code', icon: Wand2 },
-    { path: '/feedback', label: 'Feedback', icon: MessageSquare },
-    { path: '#book-call', label: 'Book a Call', icon: Calendar, action: () => setShowBookingModal(true) }
+ 
   ];
 
   const isActivePath = (path: string) => {
