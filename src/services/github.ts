@@ -36,19 +36,26 @@ export class GitHubService {
     this.token = token;
   }
 
-  async request(endpoint: string, options: RequestInit = {}) {
+  private buildHeaders(options: RequestInit = {}) {
+    return {
+      'Authorization': `Bearer ${this.token}`,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+      'User-Agent': 'ReviewAI-Bot/1.0',
+      ...(options.headers || {}),
+    } as Record<string, string>;
+  }
+
+  private async fetchResponse(endpoint: string, options: RequestInit = {}) {
     const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
-    
-    const response = await fetch(url, {
+    return fetch(url, {
       ...options,
-      headers: {
-        'Authorization': `Bearer ${this.token}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json',
-        'User-Agent': 'ReviewAI-Bot/1.0',
-        ...options.headers,
-      },
+      headers: this.buildHeaders(options),
     });
+  }
+
+  async request(endpoint: string, options: RequestInit = {}) {
+    const response = await this.fetchResponse(endpoint, options);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -61,6 +68,32 @@ export class GitHubService {
 
   async getRepositories() {
     return this.request('/user/repos?sort=updated&per_page=100');
+  }
+
+  /**
+   * Fetch ALL repositories the token can access (public + private, across pages).
+   * Uses pagination because GitHub caps responses at 100 items per page.
+   */
+  async getAllRepositories() {
+    const perPage = 100;
+    const repos: any[] = [];
+
+    for (let page = 1; page <= 100; page++) {
+      const batch = await this.request(
+        `/user/repos?sort=updated&per_page=${perPage}&page=${page}&visibility=all&affiliation=owner,collaborator,organization_member`
+      );
+
+      if (Array.isArray(batch)) {
+        repos.push(...batch);
+        if (batch.length < perPage) break;
+      } else {
+        break;
+      }
+    }
+
+    // Deduplicate by id (in case GitHub returns overlaps)
+    const unique = repos.filter((repo, index, self) => index === self.findIndex(r => r.id === repo.id));
+    return unique;
   }
 
   async getPullRequests(owner: string, repo: string, state = 'open') {

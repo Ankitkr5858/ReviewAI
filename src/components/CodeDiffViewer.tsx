@@ -24,6 +24,58 @@ interface CodeDiffViewerProps {
 
 const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) => {
 
+  const escapeHtml = (input: string) =>
+    input
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  const splitDiff = (originalRaw: string, suggestedRaw: string) => {
+    const original = originalRaw;
+    const suggested = suggestedRaw;
+
+    if (original === suggested) {
+      return {
+        originalHtml: escapeHtml(original),
+        suggestedHtml: escapeHtml(suggested),
+        changed: false,
+      };
+    }
+
+    const minLen = Math.min(original.length, suggested.length);
+    let prefix = 0;
+    while (prefix < minLen && original[prefix] === suggested[prefix]) prefix++;
+
+    let suffix = 0;
+    while (
+      suffix < (minLen - prefix) &&
+      original[original.length - 1 - suffix] === suggested[suggested.length - 1 - suffix]
+    ) {
+      suffix++;
+    }
+
+    const originalMid = original.slice(prefix, original.length - suffix);
+    const suggestedMid = suggested.slice(prefix, suggested.length - suffix);
+
+    const originalHtml =
+      escapeHtml(original.slice(0, prefix)) +
+      (originalMid
+        ? `<span class="bg-red-100 text-red-900 px-1 rounded">${escapeHtml(originalMid)}</span>`
+        : '') +
+      escapeHtml(original.slice(original.length - suffix));
+
+    const suggestedHtml =
+      escapeHtml(suggested.slice(0, prefix)) +
+      (suggestedMid
+        ? `<span class="bg-green-100 text-green-900 px-1 rounded">${escapeHtml(suggestedMid)}</span>`
+        : '') +
+      escapeHtml(suggested.slice(suggested.length - suffix));
+
+    return { originalHtml, suggestedHtml, changed: true };
+  };
+
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'high':
@@ -54,48 +106,12 @@ const CodeDiffViewer: React.FC<CodeDiffViewerProps> = ({ issue, onApplyFix }) =>
     navigator.clipboard.writeText(text);
   };
 
-  // FIXED: Highlight changes in code with light background colors and better contrast
   const highlightChanges = (originalCode: string, suggestedCode: string) => {
-    // Simple diff highlighting - mark changed parts
-    const original = originalCode.trim();
-    const suggested = suggestedCode.trim();
-    
-    if (original === suggested) return { original, suggested };
-    
-    // For prettier issues, highlight the specific changes
-    if (issue.category === 'prettier') {
-      // Highlight spacing changes
-      if (issue.rule?.includes('operator-spacing')) {
-        const highlighted = suggested.replace(/(\w+)\s+([=+\-*/])\s+(\w+)/g, 
-          '$1<span class="bg-green-100 text-green-800 px-1 rounded"> $2 </span>$3'
-        );
-        return { 
-          original: original.replace(/(\w+)([=+\-*/])(\w+)/g, '$1<span class="bg-red-100 px-1 rounded">$2</span>$3'),
-          suggested: highlighted 
-        };
-      }
-      
-      // Highlight quote changes
-      if (issue.rule?.includes('quotes')) {
-        const highlighted = suggested.replace(/'/g, '<span class="bg-green-100 text-green-800 px-1 rounded">\'</span>');
-        return { 
-          original: original.replace(/"/g, '<span class="bg-red-100 px-1 rounded">"</span>'),
-          suggested: highlighted 
-        };
-      }
-      
-      // Highlight trailing comma
-      if (issue.rule?.includes('trailing-comma')) {
-        const highlighted = suggested.replace(/,(\s*)$/, '<span class="bg-green-100 text-green-800 px-1 rounded">,</span>$1');
-        return { original, suggested: highlighted };
-      }
-    }
-    
-    // For other changes, highlight the entire difference
-    return { 
-      original: `<span class="bg-red-100 px-1 rounded">${original}</span>`,
-      suggested: `<span class="bg-green-100 text-green-800 px-1 rounded">${suggested}</span>`
-    };
+    // Preserve whitespace (important for tiny changes like a trailing semicolon)
+    const original = originalCode;
+    const suggested = suggestedCode;
+    const { originalHtml, suggestedHtml } = splitDiff(original, suggested);
+    return { original: originalHtml, suggested: suggestedHtml };
   };
 
   return (

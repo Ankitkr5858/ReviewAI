@@ -56,6 +56,65 @@ export class CodeAnalysisService {
     return this.generateFileHash(key);
   }
 
+  private stripStringLiterals(line: string): string {
+    // Replace contents of single/double/template strings with spaces.
+    // This is a lightweight heuristic to prevent "fixes" inside string literals (e.g., import paths).
+    let out = '';
+    let mode: 'none' | 'single' | 'double' | 'template' = 'none';
+    let escaped = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+
+      if (mode === 'none') {
+        if (ch === "'") {
+          mode = 'single';
+          out += ch;
+          continue;
+        }
+        if (ch === '"') {
+          mode = 'double';
+          out += ch;
+          continue;
+        }
+        if (ch === '`') {
+          mode = 'template';
+          out += ch;
+          continue;
+        }
+        out += ch;
+        continue;
+      }
+
+      // inside a string
+      if (escaped) {
+        escaped = false;
+        out += ' ';
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        out += ' ';
+        continue;
+      }
+
+      const isClosing =
+        (mode === 'single' && ch === "'") ||
+        (mode === 'double' && ch === '"') ||
+        (mode === 'template' && ch === '`');
+
+      if (isClosing) {
+        mode = 'none';
+        out += ch;
+        continue;
+      }
+
+      out += ' ';
+    }
+
+    return out;
+  }
+
   checkForConflicts(fileContent: string): { hasConflicts: boolean; conflictDetails?: any } {
     const conflictMarkers = [
       /^<{7}\s/gm,
@@ -674,14 +733,14 @@ export class CodeAnalysisService {
           const suggestedCode = line.replace(/"/g, "'");
           issues.push({
             type: 'warning',
-            severity: 'medium',
+            severity: 'low',
             file: fileName,
             line: lineNumber,
             message: 'Inconsistent quote style - prefer single quotes',
             rule: 'prettier/quotes',
             category: 'prettier',
             suggestion: 'Use consistent quote style (single quotes preferred)',
-            fixable: true,
+            fixable: false, // Style-only; avoid auto-fixing in-app
             originalCode: line,
             suggestedCode,
           });
@@ -697,32 +756,36 @@ export class CodeAnalysisService {
             const suggestedCode = line + ',';
             issues.push({
               type: 'warning',
-              severity: 'medium',
+              severity: 'low',
               file: fileName,
               line: lineNumber,
               message: 'Missing trailing comma',
               rule: 'prettier/trailing-comma',
               category: 'prettier',
               suggestion: 'Add trailing comma for better diffs',
-              fixable: true,
+              fixable: false, // Style-only; avoid auto-fixing in-app
               originalCode: line,
               suggestedCode,
             });
           }
         }
 
-        if (/\w+[=+\-*/](?!\=)\w+/.test(line)) {
-          const suggestedCode = line.replace(/(\w+)([=+\-*/])(?!\=)(\w+)/g, '$1 $2 $3');
+        // Operator spacing: only consider non-string parts and skip import/export lines.
+        // Also exclude '/' operator (commonly appears in paths/regex and is easy to mis-detect).
+        const nonString = this.stripStringLiterals(line);
+        const isImportOrExport = /^\s*(import|export)\b/.test(nonString);
+        if (!isImportOrExport && /\w+[=+\-*](?!\=)\w+/.test(nonString)) {
+          const suggestedCode = line.replace(/(\w+)([=+\-*])(?!\=)(\w+)/g, '$1 $2 $3');
           issues.push({
             type: 'warning',
-            severity: 'medium',
+            severity: 'low',
             file: fileName,
             line: lineNumber,
             message: 'Missing spaces around operators',
             rule: 'prettier/operator-spacing',
             category: 'prettier',
             suggestion: 'Add spaces around operators for readability',
-            fixable: true,
+            fixable: false, // Style-only; avoid auto-fixing in-app
             originalCode: line,
             suggestedCode,
           });

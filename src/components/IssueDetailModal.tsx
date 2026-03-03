@@ -40,6 +40,15 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
   const [fixed, setFixed] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
 
+  const normalizedOriginal = (issue.originalCode ?? '').replace(/\s+$/, '');
+  const normalizedSuggested = (issue.suggestedCode ?? '').replace(/\s+$/, '');
+  const hasPreviewDiff =
+    issue.originalCode !== undefined &&
+    issue.suggestedCode !== undefined &&
+    normalizedOriginal !== normalizedSuggested;
+
+  const canApplyAIFix = Boolean(issue.fixable);
+
   const handleAIFixClick = () => {
     setShowConfirmation(true);
   };
@@ -71,6 +80,13 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
 
     const original = issue.originalCode.trim();
     const suggested = issue.suggestedCode.trim();
+    if (original === suggested) {
+      return {
+        whatItDoes: "Applies an automated fix for this issue.",
+        whyBetter: "Some fixes may update surrounding context (formatting/imports) and might not show as a single-line change in the preview.",
+        impact: "Improves code quality while keeping behavior consistent."
+      };
+    }
     const rule = issue.rule?.toLowerCase() || '';
     const message = issue.message.toLowerCase();
 
@@ -252,6 +268,12 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
 
                       <div className="bg-white rounded-xl p-4 border border-blue-200 mt-2">
                         <h4 className="font-medium text-gray-900 mb-3 text-sm">📝 Before vs After:</h4>
+                        {!hasPreviewDiff && (
+                          <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-900">
+                            Preview note: This issue is marked auto-fixable, but the visible preview may not show a direct single-line change.
+                            The applied fix can still update the file (for example, formatting or nearby code adjustments).
+                          </div>
+                        )}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <div className="text-xs font-medium text-red-700 mb-1 flex items-center gap-1">
@@ -287,7 +309,7 @@ const IssueDetailModal: React.FC<IssueDetailModalProps> = ({
                 <div className="mt-6 flex flex-col sm:flex-row gap-4">
                   <motion.button
                     onClick={handleAIFixClick}
-                    disabled={fixing}
+                    disabled={fixing || !canApplyAIFix}
                     className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-colors disabled:opacity-50"
                     whileHover={{ scale: fixing ? 1 : 1.02 }}
                     whileTap={{ scale: fixing ? 1 : 0.98 }}

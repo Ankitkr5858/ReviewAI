@@ -36,6 +36,7 @@ import CommitSuccessModal from './CommitSuccessModal';
 import OverlaySpinner from './OverlaySpinner';
 import Header from './Header';
 import SearchableDropdown from './SearchableDropdown';
+import { runAiDeepReview } from '../services/aiDeepReview';
 
 interface CodeIssue {
   type: 'error' | 'warning' | 'info';
@@ -70,6 +71,9 @@ const TestReview: React.FC = () => {
   
   const [selectedRepo, setSelectedRepo] = useState<string>('');
   const [reviewing, setReviewing] = useState(false);
+  const [aiDeepReview, setAiDeepReview] = useState(false);
+  const [aiReviewing, setAiReviewing] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [loadingPRs, setLoadingPRs] = useState(false);
   const [pullRequests, setPullRequests] = useState<PullRequest[]>([]);
   const [selectedPR, setSelectedPR] = useState<number | null>(null);
@@ -310,6 +314,7 @@ const TestReview: React.FC = () => {
     }
 
     setReviewing(true);
+    setAiError(null);
     setReviewResult(null);
     setIssues([]);
 
@@ -326,6 +331,89 @@ const TestReview: React.FC = () => {
       if (result.success) {
         setReviewResult(result.result);
         setIssues(result.result.issues || []);
+
+        if (aiDeepReview) {
+          // Run AI deep review in background so UI remains responsive.
+          void (async () => {
+            try {
+              setAiReviewing(true);
+              setAiError(null);
+
+              const token = localStorage.getItem('github_token');
+              if (!token) throw new Error('GitHub token not found');
+
+              const openaiKey = localStorage.getItem('openai_api_key') || undefined;
+              if (!openaiKey) throw new Error('OpenAI API key not found');
+
+              const repoFullName = selectedRepo;
+
+              // Prefer PR patches when available (most accurate and compact).
+              const filesForAI =
+                (selectedPR && result.result?.fileChanges?.length)
+                  ? (result.result.fileChanges as any[])
+                      .filter(fc => typeof fc?.patch === 'string' && fc.patch.trim().length > 0)
+                      .slice(0, 10)
+                      .map(fc => ({ filename: fc.filename as string, patch: fc.patch as string }))
+                  : [];
+
+              // If we don't have PR patches (main branch review), fetch contents for files involved in issues.
+              const fallbackFiles =
+                filesForAI.length > 0
+                  ? filesForAI
+                  : await (async () => {
+                      const github = new GitHubService(token);
+                      const [o, r] = repoFullName.split('/');
+                      const issueFiles = Array.from(
+                        new Set(((result.result.issues || []) as CodeIssue[]).map(i => i.file).filter(Boolean))
+                      ).slice(0, 8);
+
+                      const contents = await Promise.all(
+                        issueFiles.map(async (filename) => {
+                          const content = await github.getFileContent(o, r, filename);
+                          return { filename, content: (content || '').slice(0, 12000) };
+                        })
+                      );
+
+                      return contents.filter(f => f.content && f.content.trim().length > 0);
+                    })();
+
+              const ai = await runAiDeepReview({
+                mode: selectedPR ? 'pr' : 'main',
+                repoFullName,
+                files: fallbackFiles,
+                openaiApiKey: openaiKey
+              });
+
+              const aiIssues: CodeIssue[] = (ai.issues || []).map((i) => ({
+                type: i.severity === 'high' ? 'error' : i.severity === 'medium' ? 'warning' : 'info',
+                severity: i.severity,
+                file: i.file,
+                line: i.line && i.line > 0 ? i.line : 1,
+                message: i.message,
+                rule: 'ai/deep-review',
+                category: i.category,
+                suggestion: `${i.suggestion}${i.rationale ? `\n\nWhy: ${i.rationale}` : ''}`,
+                fixable: false
+              }));
+
+              setReviewResult((prev: any) => ({ ...(prev || {}), aiScore: ai.score }));
+
+              setIssues((prev) => {
+                const existing = new Set(prev.map(p => `${p.file}:${p.line}:${p.message}`));
+                const merged = [...prev];
+                for (const issue of aiIssues) {
+                  const key = `${issue.file}:${issue.line}:${issue.message}`;
+                  if (!existing.has(key)) merged.push(issue);
+                }
+                return merged;
+              });
+            } catch (e: any) {
+              setAiError(e?.message || 'AI deep review failed');
+            } finally {
+              setAiReviewing(false);
+            }
+          })();
+        }
       } else {
         alert(result.error || 'Review failed');
       }
@@ -471,6 +559,23 @@ const TestReview: React.FC = () => {
     return { total, critical, warnings, info, fixable };
   };
 
+  const getQualityScore = () => {
+    // 0–100 score. We weight correctness/security issues more heavily than minor items.
+    // (This is computed from the issues we show to the user, so it stays consistent with the UI.)
+    const high = issues.filter(i => i.severity === 'high').length;
+    const medium = issues.filter(i => i.severity === 'medium').length;
+    const low = issues.filter(i => i.severity === 'low').length;
+    const securityHigh = issues.filter(i => i.severity === 'high' && i.category === 'security').length;
+
+    let score = 100;
+    score -= high * 15;
+    score -= medium * 7;
+    score -= low * 2;
+    score -= securityHigh * 10; // extra penalty
+
+    return Math.max(0, Math.min(100, score));
+  };
+
   const getTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -479,6 +584,7 @@ const TestReview: React.FC = () => {
   };
 
   const stats = getIssueStats();
+  const qualityScore = typeof reviewResult?.aiScore === 'number' ? reviewResult.aiScore : getQualityScore();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -488,8 +594,12 @@ const TestReview: React.FC = () => {
       />
 
       <OverlaySpinner 
-        isVisible={reviewing || fixing} 
-        text={reviewing ? "Analyzing your code..." : "Applying AI fixes..."} 
+        isVisible={reviewing || fixing || aiReviewing} 
+        text={
+          aiReviewing ? "Running AI deep review..." :
+          reviewing ? "Analyzing your code..." :
+          "Applying AI fixes..."
+        } 
       />
 
       <div className="p-6">
@@ -521,6 +631,25 @@ const TestReview: React.FC = () => {
               onRepoChange={handleRepoChange}
               placeholder="Choose a repository..."
             />
+
+            <div className="mt-4 flex items-start gap-3">
+              <input
+                id="ai-deep-review"
+                type="checkbox"
+                checked={aiDeepReview}
+                onChange={(e) => setAiDeepReview(e.target.checked)}
+                className="mt-1 h-4 w-4"
+              />
+              <label htmlFor="ai-deep-review" className="text-sm text-gray-700">
+                <span className="font-medium">AI Deep Review</span> (logic, edge-cases, security). This will not auto-fix or commit code.
+              </label>
+            </div>
+
+            {aiError && (
+              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                {aiError}
+              </div>
+            )}
           </motion.div>
 
           {/* Pull Request Selection */}
@@ -630,7 +759,7 @@ const TestReview: React.FC = () => {
             <>
               {/* Stats Overview */}
               <motion.div
-                className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6"
+                className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
@@ -654,6 +783,15 @@ const TestReview: React.FC = () => {
                 <div className="bg-white p-4 rounded-lg border border-gray-200 text-center">
                   <div className="text-2xl font-bold text-purple-600">{selectedPR ? 'Changed Lines' : 'Full Repo'}</div>
                   <div className="text-sm text-gray-600">Review Scope</div>
+                </div>
+                <div className="bg-white p-4 rounded-lg border border-gray-200 text-center">
+                  <div className={`text-2xl font-bold ${
+                    qualityScore >= 90 ? 'text-green-600' :
+                    qualityScore >= 75 ? 'text-blue-600' :
+                    qualityScore >= 60 ? 'text-orange-600' :
+                    'text-red-600'
+                  }`}>{qualityScore}</div>
+                  <div className="text-sm text-gray-600">Quality Score</div>
                 </div>
               </motion.div>
 

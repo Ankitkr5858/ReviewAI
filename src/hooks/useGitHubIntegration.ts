@@ -97,22 +97,8 @@ export const useGitHubIntegration = () => {
       
       const github = new GitHubService(token);
       
-      // Get all repositories (including private ones)
-      const publicRepos = await github.getRepositories();
-      
-      // Try to get private repositories as well
-      let privateRepos: any[] = [];
-      try {
-        privateRepos = await github.request('/user/repos?visibility=private&per_page=100');
-      } catch (error) {
-        console.log('Could not fetch private repos, continuing with public only');
-      }
-      
-      // Combine and deduplicate repositories
-      const allRepos = [...publicRepos, ...privateRepos];
-      const uniqueRepos = allRepos.filter((repo, index, self) => 
-        index === self.findIndex(r => r.id === repo.id)
-      );
+      // Get all repositories the token can access (public + private, paginated)
+      const uniqueRepos = await github.getAllRepositories();
       
       setRepositories(uniqueRepos);
       setIsConnected(true);
@@ -723,22 +709,8 @@ export const useGitHubIntegration = () => {
         
         console.log('🔄 Refreshing GitHub data...');
         
-        // Get all repositories (including private ones) - FRESH DATA
-        const publicRepos = await github.getRepositories();
-        
-        // Try to get private repositories as well
-        let privateRepos: any[] = [];
-        try {
-          privateRepos = await github.request('/user/repos?visibility=private&per_page=100');
-        } catch (error) {
-          console.log('Could not fetch private repos, continuing with public only');
-        }
-        
-        // Combine and deduplicate repositories
-        const allRepos = [...publicRepos, ...privateRepos];
-        const uniqueRepos = allRepos.filter((repo, index, self) => 
-          index === self.findIndex(r => r.id === repo.id)
-        );
+        // Get all repositories the token can access (public + private, paginated)
+        const uniqueRepos = await github.getAllRepositories();
         
         console.log(`✅ Fetched ${uniqueRepos.length} repositories`);
         
@@ -777,16 +749,8 @@ export const useGitHubIntegration = () => {
           // If no saved repositories, fetch fresh data
           const github = new GitHubService(token);
           
-          Promise.all([
-            github.getRepositories(),
-            github.request('/user/repos?visibility=private&per_page=100').catch(() => [])
-          ])
-            .then(([publicRepos, privateRepos]) => {
-              const allRepos = [...publicRepos, ...privateRepos];
-              const uniqueRepos = allRepos.filter((repo, index, self) => 
-                index === self.findIndex(r => r.id === repo.id)
-              );
-              
+          github.getAllRepositories()
+            .then(uniqueRepos => {
               setRepositories(uniqueRepos);
               storeUserData(token, 'repositories', uniqueRepos);
               return loadDashboardData(github, uniqueRepos, token);
